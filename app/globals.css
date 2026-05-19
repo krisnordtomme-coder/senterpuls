@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-primary: #2563eb;
+  --brand-dark: #1B3A5C;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f8fafc;
+}
