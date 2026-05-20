@@ -9,7 +9,15 @@ const CAT_STYLES = {
   baerekraft: { bg: "bg-emerald-50", text: "text-emerald-700" },
   nyhet: { bg: "bg-gray-100", text: "text-gray-700" },
 }
-const CAT_LABELS = { kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event", sesong: "Sesong", baerekraft: "B\u00e6rekraft", nyhet: "Nyhet" }
+
+const CAT_LABELS = {
+  kampanje: "Kampanje",
+  produktlansering: "Produktlansering",
+  event: "Event",
+  sesong: "Sesong",
+  baerekraft: "Bærekraft",
+  nyhet: "Nyhet",
+}
 
 export default function SuggestionCard({ suggestion, onUpdateStatus }) {
   const [expanded, setExpanded] = useState(false)
@@ -41,17 +49,26 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
             <span className="font-medium text-sm">{store?.name}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.text}`}>{CAT_LABELS[s.category] || s.category}</span>
           </div>
-          <p className="text-xs text-gray-400">{content?.source || "nettside"} \u00b7 {new Date(s.created_at).toLocaleDateString("no-NO")}</p>
+          <p className="text-xs text-gray-400">{content?.source || "nettside"} · {new Date(s.created_at).toLocaleDateString("no-NO")}</p>
         </div>
         <span className={`text-sm font-semibold flex-shrink-0 ${s.relevance_score >= 80 ? "text-green-600" : s.relevance_score >= 60 ? "text-amber-600" : "text-gray-400"}`}>{s.relevance_score}/100</span>
       </div>
       <p className="text-sm text-gray-600 mb-3 leading-relaxed">{content?.original_text}</p>
       <button onClick={() => setExpanded(!expanded)} className="text-xs text-blue-600 hover:text-blue-700 mb-2">{expanded ? "Skjul AI-forslag" : "Vis AI-forslag"}</button>
       {expanded && <div className="bg-gray-50 rounded-lg p-3 mb-3 space-y-3">{Object.entries(channels).map(([ch, text]) => (
-        <div key={ch} className="text-sm"><div className="flex items-center justify-between mb-1"><span className="text-xs font-medium text-gray-500 uppercase">{ch}</span><button onClick={() => copyText(ch, text)} className="text-xs text-blue-600 hover:text-blue-700">{copied === ch ? "Kopiert!" : "Kopier"}</button></div><p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{text}</p></div>
+        <div key={ch} className="text-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-gray-500 uppercase">{ch}</span>
+            <button onClick={() => copyText(ch, text)} className="text-xs text-blue-600 hover:text-blue-700">{copied === ch ? "Kopiert!" : "Kopier"}</button>
+          </div>
+          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{text}</p>
+        </div>
       ))}</div>}
-      {!isPublished && <div className="flex gap-2 pt-1"><button onClick={() => onUpdateStatus(s.id, "published")} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition">Godkjenn og publiser</button><button onClick={() => onUpdateStatus(s.id, "dismissed")} className="px-3 py-1.5 text-gray-400 text-xs rounded-lg hover:bg-gray-100 transition">Avvis</button></div>}
-      {isPublished && <span className="text-xs text-green-600 font-medium">\u2713 Publisert</span>}
+      {!isPublished && <div className="flex gap-2 pt-1">
+        <button onClick={() => onUpdateStatus(s.id, "published")} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition">Godkjenn og publiser</button>
+        <button onClick={() => onUpdateStatus(s.id, "dismissed")} className="px-3 py-1.5 text-gray-400 text-xs rounded-lg hover:bg-gray-100 transition">Avvis</button>
+      </div>}
+      {isPublished && <span className="text-xs text-green-600 font-medium">✓ Publisert</span>}
     </div>
   )
-}
+      }
