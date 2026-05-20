@@ -49,6 +49,7 @@ export default function Home() {
       const res = await fetch("/api/scrape", { method: "POST" })
       const data = await res.json()
       setScanResult(data)
+            await fetch("/api/analyze", { method: "POST" })
       setTimeout(loadData, 4000)
     } catch (e) {
       setScanResult({ error: e.message })
