@@ -31,7 +31,9 @@ async function analyzeContent(storeName, text) {
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: "Butikk: " + storeName + "\nInnhold: " + text }],
     })
-    return JSON.parse(response.content[0].text)
+    let aiText = response.content[0].text
+         aiText = aiText.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '')
+         return JSON.parse(aiText)
   } catch (e) {
     console.error("AI analysis failed:", e.message)
     return null
