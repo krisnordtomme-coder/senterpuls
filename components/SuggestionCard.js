@@ -19,6 +19,12 @@ const CAT_LABELS = {
   nyhet: "Nyhet",
 }
 
+const SOURCE_BADGE = {
+  instagram: { bg: "bg-pink-50", text: "text-pink-600", label: "Instagram" },
+  facebook: { bg: "bg-blue-50", text: "text-blue-600", label: "Facebook" },
+  website: { bg: "bg-gray-50", text: "text-gray-500", label: "Nettside" },
+}
+
 export default function SuggestionCard({ suggestion, onUpdateStatus }) {
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(null)
@@ -36,6 +42,8 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
   const imageUrl = content?.image_urls?.[0]
   const sourceUrl = content?.original_url
   const hasImage = imageUrl && !imgError
+  const contentSource = content?.source || "website"
+  const srcBadge = SOURCE_BADGE[contentSource] || SOURCE_BADGE.website
 
   function copyText(channel, text) {
     navigator.clipboard.writeText(text)
@@ -91,15 +99,18 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
                 {store?.name?.substring(0, 2).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{store?.name}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.text}`}>{CAT_LABELS[s.category] || s.category}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${srcBadge.bg} ${srcBadge.text}`}>{srcBadge.label}</span>
                 </div>
-                <p className="text-xs text-gray-400">{content?.source || "nettside"} · {new Date(s.created_at).toLocaleDateString("no-NO")}</p>
+                <p className="text-xs text-gray-400">{new Date(s.created_at).toLocaleDateString("no-NO")}</p>
               </div>
               <span className={`text-sm font-semibold flex-shrink-0 ${s.relevance_score >= 80 ? "text-green-600" : s.relevance_score >= 60 ? "text-amber-600" : "text-gray-400"}`}>{s.relevance_score}/100</span>
             </div>
+
             <p className="text-sm text-gray-600 mb-2 leading-relaxed">{content?.original_text}</p>
+
             <div className="flex items-center gap-3 mb-3">
               {sourceUrl && (
                 <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700">
@@ -114,27 +125,34 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
                 </button>
               )}
             </div>
-            <button onClick={() => setExpanded(!expanded)} className="text-xs text-blue-600 hover:text-blue-700 mb-2 block">{expanded ? "Skjul AI-forslag" : "Vis AI-forslag"}</button>
+
+            <button onClick={() => setExpanded(!expanded)} className="text-xs text-blue-600 hover:text-blue-700 mb-2 block">
+              {expanded ? "Skjul AI-forslag" : "Vis AI-forslag"}
+            </button>
+
             {expanded && (
               <div className="bg-gray-50 rounded-lg p-3 mb-3 space-y-3">
                 {Object.entries(channels).map(([ch, text]) => (
                   <div key={ch}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-gray-500 uppercase">{ch}</span>
-                      <button onClick={() => copyText(ch, text)} className="text-xs text-blue-500 hover:text-blue-700">{copied === ch ? "Kopiert!" : "Kopier"}</button>
+                      <button onClick={() => copyText(ch, text)} className="text-xs text-blue-500 hover:text-blue-700">
+                        {copied === ch ? "Kopiert!" : "Kopier"}
+                      </button>
                     </div>
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">{text}</p>
                   </div>
                 ))}
               </div>
             )}
+
             {!isPublished && (
               <div className="flex gap-2 pt-1">
                 <button onClick={() => onUpdateStatus(s.id, "published")} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition">Godkjenn og publiser</button>
                 <button onClick={() => onUpdateStatus(s.id, "dismissed")} className="px-3 py-1.5 text-gray-400 text-xs rounded-lg hover:bg-gray-100 transition">Avvis</button>
               </div>
             )}
-            {isPublished && <span className="text-xs text-green-600 font-medium">✓ Publisert</span>}
+            {isPublished && <span className="text-xs text-green-600 font-medium">\u2713 Publisert</span>}
           </div>
         </div>
       </div>
@@ -144,18 +162,10 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
           <div className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <img src={imageUrl} alt={store?.name || ""} className="max-w-full max-h-[85vh] object-contain rounded-lg" />
             <div className="absolute top-3 right-3 flex gap-2">
-              <button
-                onClick={downloadImage}
-                className="bg-white/90 hover:bg-white text-gray-700 rounded-full p-2 shadow-lg transition"
-                title="Last ned"
-              >
+              <button onClick={downloadImage} className="bg-white/90 hover:bg-white text-gray-700 rounded-full p-2 shadow-lg transition" title="Last ned">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
               </button>
-              <button
-                onClick={() => setShowLightbox(false)}
-                className="bg-white/90 hover:bg-white text-gray-700 rounded-full p-2 shadow-lg transition"
-                title="Lukk"
-              >
+              <button onClick={() => setShowLightbox(false)} className="bg-white/90 hover:bg-white text-gray-700 rounded-full p-2 shadow-lg transition" title="Lukk">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
