@@ -15,7 +15,7 @@ const CAT_LABELS = {
   produktlansering: "Produktlansering",
   event: "Event",
   sesong: "Sesong",
-  baerekraft: "B\u00e6rekraft",
+  baerekraft: "Bærekraft",
   nyhet: "Nyhet",
 }
 
@@ -65,7 +65,7 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
               <span className="font-medium text-sm">{store?.name}</span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.text}`}>{CAT_LABELS[s.category] || s.category}</span>
             </div>
-            <p className="text-xs text-gray-400">{content?.source || "nettside"} \u00b7 {new Date(s.created_at).toLocaleDateString("no-NO")}</p>
+            <p className="text-xs text-gray-400">{content?.source || "nettside"} · {new Date(s.created_at).toLocaleDateString("no-NO")}</p>
           </div>
           <span className={`text-sm font-semibold flex-shrink-0 ${s.relevance_score >= 80 ? "text-green-600" : s.relevance_score >= 60 ? "text-amber-600" : "text-gray-400"}`}>{s.relevance_score}/100</span>
         </div>
@@ -96,7 +96,7 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
           <button onClick={() => onUpdateStatus(s.id, "dismissed")} className="px-3 py-1.5 text-gray-400 text-xs rounded-lg hover:bg-gray-100 transition">Avvis</button>
         </div>}
 
-        {isPublished && <span className="text-xs text-green-600 font-medium">\u2713 Publisert</span>}
+        {isPublished && <span className="text-xs text-green-600 font-medium">✓ Publisert</span>}
       </div>
     </div>
   )
