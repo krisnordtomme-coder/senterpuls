@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 import * as cheerio from "cheerio"
 import { createHash } from "crypto"
-import { STORES } from "@/lib/stores"
+import { STORES } from "../../../lib/stores"
 
 export const maxDuration = 60
 
