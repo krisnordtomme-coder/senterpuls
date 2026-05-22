@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import { createHash } from "crypto"
 import { STORES } from "../../../lib/stores"
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -31,8 +31,8 @@ function getAccessToken() {
     return appId + "|" + appSecret
 }
 
-// Fetch Instagram posts via Apify Instagram Scraper (proxy to avoid 429)
-async function fetchInstagramViaApify(usernames) {
+// Fetch Instagram posts for a batch of usernames via Apify
+async function fetchInstagramBatchViaApify(usernames) {
     const token = process.env.APIFY_API_TOKEN
     if (!token || usernames.length === 0) return {}
 
@@ -50,17 +50,16 @@ async function fetchInstagramViaApify(usernames) {
                     resultsLimit: 5,
                     searchType: "user",
                 }),
-                signal: AbortSignal.timeout(50000),
+                signal: AbortSignal.timeout(45000),
             }
         )
         if (!res.ok) {
             const errText = await res.text()
-            console.log("Apify error: " + res.status + " " + errText.substring(0, 200))
+            console.log("Apify error " + res.status + ": " + errText.substring(0, 200))
             return {}
         }
         const items = await res.json()
 
-        // Group results by username
         const byUser = {}
         for (const item of items) {
             const ownerUsername = item.ownerUsername || ""
@@ -81,7 +80,7 @@ async function fetchInstagramViaApify(usernames) {
         }
         return byUser
     } catch (e) {
-        console.log("Apify fetch error: " + e.message)
+        console.log("Apify batch error: " + e.message)
         return {}
     }
 }
@@ -141,7 +140,7 @@ export async function POST() {
             storeConfig[s.name.toLowerCase()] = s
         }
 
-        // Collect all Instagram usernames for one batch Apify request
+        // Collect all Instagram usernames
         const igUsernames = []
         const usernameToStore = {}
         for (const store of dbStores) {
@@ -152,38 +151,42 @@ export async function POST() {
             }
         }
 
-        // Fetch ALL Instagram posts in one Apify batch call
-        console.log("Fetching Instagram via Apify for " + igUsernames.length + " profiles...")
-        const igPostsByUser = await fetchInstagramViaApify(igUsernames)
-        console.log("Apify returned posts for " + Object.keys(igPostsByUser).length + " profiles")
-
         let totalInserted = 0
         const errors = []
         const results = { instagram: 0, facebook: 0 }
 
-        // Process Instagram results
-        for (const [username, posts] of Object.entries(igPostsByUser)) {
-            const store = usernameToStore[username.toLowerCase()]
-            if (!store) continue
-            for (const post of posts) {
-                const hash = hashContent(post.text)
-                const { data: existing } = await supabase
-                    .from("content").select("id").eq("content_hash", hash).limit(1)
-                if (existing?.length > 0) continue
+        // Process Instagram in batches of 5 via Apify
+        const BATCH_SIZE = 5
+        for (let i = 0; i < igUsernames.length; i += BATCH_SIZE) {
+            const batch = igUsernames.slice(i, i + BATCH_SIZE)
+            console.log("Apify batch " + (Math.floor(i/BATCH_SIZE)+1) + ": " + batch.join(", "))
 
-                const { error } = await supabase.from("content").insert({
-                    store_id: store.id,
-                    source: "instagram",
-                    original_text: post.text,
-                    original_url: post.url,
-                    image_urls: post.images?.filter(img => img?.startsWith("http")) || [],
-                    content_hash: hash,
-                })
-                if (!error) {
-                    totalInserted++
-                    results.instagram++
-                } else {
-                    errors.push(store.name + " (IG): " + error.message)
+            const igPostsByUser = await fetchInstagramBatchViaApify(batch)
+            console.log("  -> Got posts for " + Object.keys(igPostsByUser).length + " profiles")
+
+            for (const [username, posts] of Object.entries(igPostsByUser)) {
+                const store = usernameToStore[username.toLowerCase()]
+                if (!store) continue
+                for (const post of posts) {
+                    const hash = hashContent(post.text)
+                    const { data: existing } = await supabase
+                        .from("content").select("id").eq("content_hash", hash).limit(1)
+                    if (existing?.length > 0) continue
+
+                    const { error } = await supabase.from("content").insert({
+                        store_id: store.id,
+                        source: "instagram",
+                        original_text: post.text,
+                        original_url: post.url,
+                        image_urls: post.images?.filter(img => img?.startsWith("http")) || [],
+                        content_hash: hash,
+                    })
+                    if (!error) {
+                        totalInserted++
+                        results.instagram++
+                    } else {
+                        errors.push(store.name + " (IG): " + error.message)
+                    }
                 }
             }
         }
