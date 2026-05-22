@@ -7,9 +7,7 @@ export const maxDuration = 60
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  )
-
-const INSTAGRAM_APP_ID = "936619743392459"
+)
 
 function hashContent(text) {
     return createHash("md5").update(text).digest("hex")
@@ -18,12 +16,12 @@ function hashContent(text) {
 function decodeHtmlEntities(text) {
     if (!text) return text
     return text
-      .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num)))
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
+        .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num)))
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
 }
 
 function getAccessToken() {
@@ -33,218 +31,214 @@ function getAccessToken() {
     return appId + "|" + appSecret
 }
 
-// Fetch recent posts from Instagram using internal web API
-async function fetchInstagramPosts(username) {
-    if (!username) return []
-        try {
-              const url = "https://i.instagram.com/api/v1/users/web_profile_info/?username=" + username
-              const res = await fetch(url, {
-                      headers: {
-                                "x-ig-app-id": INSTAGRAM_APP_ID,
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                                "Accept": "*/*",
-                                "Accept-Language": "en-US,en;q=0.9",
-                                "Accept-Encoding": "gzip, deflate, br",
-                      },
-                      signal: AbortSignal.timeout(12000),
-              })
-              if (!res.ok) {
-                      console.log("Instagram API " + res.status + " for @" + username)
-                      return []
-              }
-              const data = await res.json()
-              const user = data?.data?.user
-              if (!user) return []
+// Fetch Instagram posts via Apify Instagram Scraper (proxy to avoid 429)
+async function fetchInstagramViaApify(usernames) {
+    const token = process.env.APIFY_API_TOKEN
+    if (!token || usernames.length === 0) return {}
 
-                    const posts = []
-                          const edges = user.edge_owner_to_timeline_media?.edges || []
-                                for (const edge of edges.slice(0, 5)) {
-                                        const node = edge.node
-                                        const caption = node.edge_media_to_caption?.edges?.[0]?.node?.text || ""
-                                        if (!caption || caption.length < 10) continue
-                                        const timestamp = node.taken_at_timestamp
-                                        const date = timestamp ? new Date(timestamp * 1000).toISOString() : null
-                                        posts.push({
-                                                  text: decodeHtmlEntities(caption.substring(0, 500)),
-                                                  url: "https://www.instagram.com/p/" + node.shortcode + "/",
-                                                  images: node.display_url ? [node.display_url] : [],
-                                                  source: "instagram",
-                                                  date: date,
-                                        })
-                                }
+    const directUrls = usernames.map(u => "https://www.instagram.com/" + u + "/")
 
-      // If no posts with captions, fall back to bio
-      if (posts.length === 0 && user.biography) {
-              posts.push({
-                        text: decodeHtmlEntities(user.full_name + ": " + user.biography),
-                        url: "https://www.instagram.com/" + username + "/",
-                        images: user.profile_pic_url_hd ? [user.profile_pic_url_hd] : [],
-                        source: "instagram",
-              })
-      }
-
-      return posts
-        } catch (e) {
-              console.log("Instagram fetch error for @" + username + ": " + e.message)
-              return []
+    try {
+        const res = await fetch(
+            "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=" + token,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    directUrls: directUrls,
+                    resultsType: "posts",
+                    resultsLimit: 5,
+                    searchType: "user",
+                }),
+                signal: AbortSignal.timeout(50000),
+            }
+        )
+        if (!res.ok) {
+            const errText = await res.text()
+            console.log("Apify error: " + res.status + " " + errText.substring(0, 200))
+            return {}
         }
+        const items = await res.json()
+
+        // Group results by username
+        const byUser = {}
+        for (const item of items) {
+            const ownerUsername = item.ownerUsername || ""
+            if (!ownerUsername) continue
+            if (!byUser[ownerUsername]) byUser[ownerUsername] = []
+            if (byUser[ownerUsername].length >= 5) continue
+
+            const caption = item.caption || ""
+            if (caption.length < 10) continue
+
+            byUser[ownerUsername].push({
+                text: decodeHtmlEntities(caption.substring(0, 500)),
+                url: item.url || "https://www.instagram.com/p/" + (item.shortCode || "") + "/",
+                images: item.displayUrl ? [item.displayUrl] : [],
+                source: "instagram",
+                date: item.timestamp || null,
+            })
+        }
+        return byUser
+    } catch (e) {
+        console.log("Apify fetch error: " + e.message)
+        return {}
+    }
 }
 
-// Fallback: scrape Instagram meta tags from public profile page
-async function fetchInstagramFallback(username) {
-    if (!username) return []
-        try {
-              const profileUrl = "https://www.instagram.com/" + username + "/"
-              const res = await fetch(profileUrl, {
-                      headers: {
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                                "Accept": "text/html",
-                      },
-                      signal: AbortSignal.timeout(8000),
-                      redirect: "follow",
-              })
-              if (!res.ok) return []
-                    const html = await res.text()
-              const descMatch = html.match(/<meta\s+(?:name|property)="(?:description|og:description)"\s+content="([^"]*)"/)
-              const imgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]*)"/)
-              if (descMatch && descMatch[1] && descMatch[1].length > 20) {
-                      return [{
-                                text: decodeHtmlEntities(descMatch[1]),
-                                url: profileUrl,
-                                images: imgMatch ? [imgMatch[1]] : [],
-                                source: "instagram",
-                      }]
-              }
-              return []
-        } catch {
-              return []
-        }
-}
-
-// Fetch recent posts from a Facebook Page via Graph API
+// Fetch Facebook posts via Graph API
 async function fetchFacebookPosts(pageName, accessToken) {
     if (!pageName || !accessToken) return []
-        try {
-              const searchUrl = "https://graph.facebook.com/v19.0/" + pageName + "?fields=id,name,about,description&access_token=" + accessToken
-              const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(10000) })
-              if (!searchRes.ok) return []
-                    const pageData = await searchRes.json()
-              if (!pageData.id) return []
+    try {
+        const searchUrl = "https://graph.facebook.com/v19.0/" + pageName + "?fields=id,name,about,description&access_token=" + accessToken
+        const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(10000) })
+        if (!searchRes.ok) return []
+        const pageData = await searchRes.json()
+        if (!pageData.id) return []
 
-                    // Try to fetch posts
-                    const postsUrl = "https://graph.facebook.com/v19.0/" + pageData.id + "/posts?fields=message,created_time,full_picture,permalink_url&limit=5&access_token=" + accessToken
-              const postsRes = await fetch(postsUrl, { signal: AbortSignal.timeout(10000) })
-              if (postsRes.ok) {
-                      const postsData = await postsRes.json()
-                      const posts = []
-                              for (const post of (postsData.data || [])) {
-                                        if (!post.message || post.message.length < 15) continue
-                                        posts.push({
-                                                    text: decodeHtmlEntities(post.message.substring(0, 500)),
-                                                    url: post.permalink_url || "https://www.facebook.com/" + pageName + "/",
-                                                    images: post.full_picture ? [post.full_picture] : [],
-                                                    source: "facebook",
-                                        })
-                              }
-                      if (posts.length > 0) return posts.slice(0, 5)
-              }
-
-      // Fallback to page description
-      if (pageData.description || pageData.about) {
-              return [{
-                        text: decodeHtmlEntities(pageData.name + ": " + (pageData.description || pageData.about)),
-                        url: "https://www.facebook.com/" + pageName + "/",
-                        images: [],
-                        source: "facebook",
-              }]
-      }
-              return []
-        } catch {
-              return []
+        const postsUrl = "https://graph.facebook.com/v19.0/" + pageData.id + "/posts?fields=message,created_time,full_picture,permalink_url&limit=5&access_token=" + accessToken
+        const postsRes = await fetch(postsUrl, { signal: AbortSignal.timeout(10000) })
+        if (postsRes.ok) {
+            const postsData = await postsRes.json()
+            const posts = []
+            for (const post of (postsData.data || [])) {
+                if (!post.message || post.message.length < 15) continue
+                posts.push({
+                    text: decodeHtmlEntities(post.message.substring(0, 500)),
+                    url: post.permalink_url || "https://www.facebook.com/" + pageName + "/",
+                    images: post.full_picture ? [post.full_picture] : [],
+                    source: "facebook",
+                })
+            }
+            if (posts.length > 0) return posts.slice(0, 5)
         }
+
+        if (pageData.description || pageData.about) {
+            return [{
+                text: decodeHtmlEntities(pageData.name + ": " + (pageData.description || pageData.about)),
+                url: "https://www.facebook.com/" + pageName + "/",
+                images: [],
+                source: "facebook",
+            }]
+        }
+        return []
+    } catch {
+        return []
+    }
 }
 
 export async function POST() {
     try {
-          const accessToken = getAccessToken()
+        const accessToken = getAccessToken()
 
-      const { data: dbStores } = await supabase.from("stores").select("*").eq("active", true)
-          if (!dbStores?.length) {
-                  return Response.json({ message: "Ingen butikker funnet", stores: 0, newContent: 0 }, { status: 404 })
-          }
+        const { data: dbStores } = await supabase.from("stores").select("*").eq("active", true)
+        if (!dbStores?.length) {
+            return Response.json({ message: "Ingen butikker funnet", stores: 0, newContent: 0 }, { status: 404 })
+        }
 
-      const storeConfig = {}
-            for (const s of STORES) {
-                    storeConfig[s.name.toLowerCase()] = s
+        const storeConfig = {}
+        for (const s of STORES) {
+            storeConfig[s.name.toLowerCase()] = s
+        }
+
+        // Collect all Instagram usernames for one batch Apify request
+        const igUsernames = []
+        const usernameToStore = {}
+        for (const store of dbStores) {
+            const config = storeConfig[store.name.toLowerCase()]
+            if (config?.instagram) {
+                igUsernames.push(config.instagram)
+                usernameToStore[config.instagram.toLowerCase()] = store
             }
+        }
 
-      let totalInserted = 0
-          const errors = []
-                const results = { instagram: 0, facebook: 0 }
+        // Fetch ALL Instagram posts in one Apify batch call
+        console.log("Fetching Instagram via Apify for " + igUsernames.length + " profiles...")
+        const igPostsByUser = await fetchInstagramViaApify(igUsernames)
+        console.log("Apify returned posts for " + Object.keys(igPostsByUser).length + " profiles")
 
-      // Process stores in batches of 3
-      for (let i = 0; i < dbStores.length; i += 3) {
-              const batch = dbStores.slice(i, i + 3)
-              const batchResults = await Promise.all(
-                        batch.map(async (store) => {
-                                    const config = storeConfig[store.name.toLowerCase()]
-                                    if (!config) return { store, posts: [] }
+        let totalInserted = 0
+        const errors = []
+        const results = { instagram: 0, facebook: 0 }
 
-                                                // Instagram: try internal API first, fall back to meta scraping
-                                                let igPosts = await fetchInstagramPosts(config.instagram)
-                                    if (igPosts.length === 0 && config.instagram) {
-                                                  igPosts = await fetchInstagramFallback(config.instagram)
-                                    }
+        // Process Instagram results
+        for (const [username, posts] of Object.entries(igPostsByUser)) {
+            const store = usernameToStore[username.toLowerCase()]
+            if (!store) continue
+            for (const post of posts) {
+                const hash = hashContent(post.text)
+                const { data: existing } = await supabase
+                    .from("content").select("id").eq("content_hash", hash).limit(1)
+                if (existing?.length > 0) continue
 
-                                            // Facebook: use Graph API
-                                            const fbPosts = accessToken ? await fetchFacebookPosts(config.facebook, accessToken) : []
+                const { error } = await supabase.from("content").insert({
+                    store_id: store.id,
+                    source: "instagram",
+                    original_text: post.text,
+                    original_url: post.url,
+                    image_urls: post.images?.filter(img => img?.startsWith("http")) || [],
+                    content_hash: hash,
+                })
+                if (!error) {
+                    totalInserted++
+                    results.instagram++
+                } else {
+                    errors.push(store.name + " (IG): " + error.message)
+                }
+            }
+        }
 
-                                                        return { store, posts: [...igPosts, ...fbPosts] }
-                        })
-                      )
+        // Process Facebook in batches of 3
+        for (let i = 0; i < dbStores.length; i += 3) {
+            const batch = dbStores.slice(i, i + 3)
+            const batchResults = await Promise.all(
+                batch.map(async (store) => {
+                    const config = storeConfig[store.name.toLowerCase()]
+                    if (!config?.facebook || !accessToken) return { store, posts: [] }
+                    const fbPosts = await fetchFacebookPosts(config.facebook, accessToken)
+                    return { store, posts: fbPosts }
+                })
+            )
 
             for (const { store, posts } of batchResults) {
-                      for (const post of posts) {
-                                  const hash = hashContent(post.text)
-                                  const { data: existing } = await supabase
-                                    .from("content")
-                                    .select("id")
-                                    .eq("content_hash", hash)
-                                    .limit(1)
-                                  if (existing?.length > 0) continue
+                for (const post of posts) {
+                    const hash = hashContent(post.text)
+                    const { data: existing } = await supabase
+                        .from("content").select("id").eq("content_hash", hash).limit(1)
+                    if (existing?.length > 0) continue
 
-                        const { error } = await supabase.from("content").insert({
-                                      store_id: store.id,
-                                      source: post.source,
-                                      original_text: post.text,
-                                      original_url: post.url,
-                                      image_urls: post.images?.filter(img => img?.startsWith("http")) || [],
-                                      content_hash: hash,
-                        })
-                                  if (!error) {
-                                                totalInserted++
-                                                results[post.source]++
-                                  } else {
-                                                errors.push(store.name + ": " + error.message)
-                                  }
-                      }
+                    const { error } = await supabase.from("content").insert({
+                        store_id: store.id,
+                        source: "facebook",
+                        original_text: post.text,
+                        original_url: post.url,
+                        image_urls: post.images?.filter(img => img?.startsWith("http")) || [],
+                        content_hash: hash,
+                    })
+                    if (!error) {
+                        totalInserted++
+                        results.facebook++
+                    } else {
+                        errors.push(store.name + " (FB): " + error.message)
+                    }
+                }
             }
-      }
+        }
 
-      // Trigger AI analysis if new content found
-      if (totalInserted > 0) {
-              const base = process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : "http://localhost:3000"
-              fetch(base + "/api/analyze", { method: "POST" }).catch(() => {})
-      }
+        // Trigger AI analysis if new content found
+        if (totalInserted > 0) {
+            const base = process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : "http://localhost:3000"
+            fetch(base + "/api/analyze", { method: "POST" }).catch(() => {})
+        }
 
-      return Response.json({
-              message: "SoMe-scraping ferdig",
-              stores: dbStores.length,
-              newContent: totalInserted,
-              breakdown: results,
-              errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
-      })
+        return Response.json({
+            message: "SoMe-scraping ferdig",
+            stores: dbStores.length,
+            newContent: totalInserted,
+            breakdown: results,
+            errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
+        })
     } catch (e) {
-          return Response.json({ error: e.message }, { status: 500 })
+        return Response.json({ error: e.message }, { status: 500 })
     }
 }
