@@ -9,20 +9,21 @@ const CAT_STYLES = {
   baerekraft: { bg: "bg-emerald-50", text: "text-emerald-700" },
   nyhet: { bg: "bg-gray-100", text: "text-gray-700" },
 }
-
 const CAT_LABELS = {
-  kampanje: "Kampanje",
-  produktlansering: "Produktlansering",
-  event: "Event",
-  sesong: "Sesong",
-  baerekraft: "Bærekraft",
-  nyhet: "Nyhet",
+  kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event",
+  sesong: "Sesong", baerekraft: "BÃ¦rekraft", nyhet: "Nyhet",
 }
-
 const SOURCE_BADGE = {
   instagram: { bg: "bg-pink-50", text: "text-pink-600", label: "Instagram" },
   facebook: { bg: "bg-blue-50", text: "text-blue-600", label: "Facebook" },
   website: { bg: "bg-gray-50", text: "text-gray-500", label: "Nettside" },
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleDateString("no-NO", { day: "numeric", month: "short", year: "numeric" })
 }
 
 export default function SuggestionCard({ suggestion, onUpdateStatus }) {
@@ -30,7 +31,6 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
   const [copied, setCopied] = useState(null)
   const [imgError, setImgError] = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
-
   const s = suggestion
   const store = s.stores
   const content = s.content
@@ -38,12 +38,16 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
   const channels = s.suggested_text || {}
   const isPublished = s.status === "published"
   const isDismissed = s.status === "dismissed"
-
   const imageUrl = content?.image_urls?.[0]
   const sourceUrl = content?.original_url
   const hasImage = imageUrl && !imgError
   const contentSource = content?.source || "website"
   const srcBadge = SOURCE_BADGE[contentSource] || SOURCE_BADGE.website
+
+  // Show posted_at if available, otherwise fall back to created_at
+  const postedAt = content?.posted_at
+  const displayDate = formatDate(postedAt) || new Date(s.created_at).toLocaleDateString("no-NO")
+  const dateLabel = postedAt ? "Publisert" : ""
 
   function copyText(channel, text) {
     navigator.clipboard.writeText(text)
@@ -64,9 +68,7 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch {
-      window.open(imageUrl, "_blank")
-    }
+    } catch { window.open(imageUrl, "_blank") }
   }
 
   if (isDismissed) return null
@@ -77,22 +79,14 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
         <div className="flex">
           <div className="flex-shrink-0 w-28 min-h-[7rem] bg-gray-50 relative">
             {hasImage ? (
-              <img
-                src={imageUrl}
-                alt={store?.name || ""}
-                className="w-28 h-full object-cover cursor-pointer hover:opacity-90 transition"
-                style={{ aspectRatio: "1/1", maxHeight: "10rem" }}
-                onClick={() => setShowLightbox(true)}
-                onError={() => setImgError(true)}
-              />
+              <img src={imageUrl} alt={store?.name || ""} className="w-28 h-full object-cover cursor-pointer hover:opacity-90 transition" style={{ aspectRatio: "1/1", maxHeight: "10rem" }} onClick={() => setShowLightbox(true)} onError={() => setImgError(true)} />
             ) : (
               <div className="w-28 h-full flex items-center justify-center text-gray-300">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </div>
             )}
           </div>
+
           <div className="flex-1 min-w-0 p-4">
             <div className="flex items-start gap-3 mb-3">
               <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-semibold flex-shrink-0">
@@ -104,7 +98,7 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
                   <span className={`text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.text}`}>{CAT_LABELS[s.category] || s.category}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${srcBadge.bg} ${srcBadge.text}`}>{srcBadge.label}</span>
                 </div>
-                <p className="text-xs text-gray-400">{new Date(s.created_at).toLocaleDateString("no-NO")}</p>
+                <p className="text-xs text-gray-400">{dateLabel ? dateLabel + " " : ""}{displayDate}</p>
               </div>
               <span className={`text-sm font-semibold flex-shrink-0 ${s.relevance_score >= 80 ? "text-green-600" : s.relevance_score >= 60 ? "text-amber-600" : "text-gray-400"}`}>{s.relevance_score}/100</span>
             </div>
@@ -152,7 +146,7 @@ export default function SuggestionCard({ suggestion, onUpdateStatus }) {
                 <button onClick={() => onUpdateStatus(s.id, "dismissed")} className="px-3 py-1.5 text-gray-400 text-xs rounded-lg hover:bg-gray-100 transition">Avvis</button>
               </div>
             )}
-            {isPublished && <span className="text-xs text-green-600 font-medium">\u2713 Publisert</span>}
+            {isPublished && <span className="text-xs text-green-600 font-medium">{"â"} Publisert</span>}
           </div>
         </div>
       </div>
