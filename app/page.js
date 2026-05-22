@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase"
 import SuggestionCard from "../components/SuggestionCard"
 
 const CATEGORIES = ["Alle", "kampanje", "produktlansering", "event", "sesong", "baerekraft", "nyhet"]
-const CAT_LABELS = { kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event", sesong: "Sesong", baerekraft: "BÃ¦rekraft", nyhet: "Nyhet" }
+const CAT_LABELS = { kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event", sesong: "Sesong", baerekraft: "Bærekraft", nyhet: "Nyhet" }
 const SOURCES = ["Alle", "website", "instagram", "facebook"]
 const SOURCE_LABELS = { website: "Nettside", instagram: "Instagram", facebook: "Facebook" }
 const SOURCE_ICONS = { instagram: "\u{1F4F7}", facebook: "\u{1F4AC}", website: "\u{1F310}" }
@@ -88,14 +88,14 @@ export default function Home() {
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Senter<span className="text-blue-600">Puls</span></h1>
-            <p className="text-sm text-gray-500">VÃ¦rstetorvet Â· {stores.length} leietakere</p>
+            <p className="text-sm text-gray-500">Værstetorvet · {stores.length} leietakere</p>
           </div>
           <div className="flex gap-2">
             <button onClick={runSocialScan} disabled={scanningSocial} className={`px-4 py-2 text-sm rounded-lg transition ${scanningSocial ? "bg-pink-400 text-white cursor-wait" : "bg-pink-50 text-pink-700 border border-pink-200 hover:bg-pink-100"}`}>
               {scanningSocial ? "Scanner SoMe..." : "\u{1F4F1} SoMe-scan"}
             </button>
             <button onClick={runScan} disabled={scanning} className={`px-4 py-2 text-white text-sm rounded-lg transition ${scanning ? "bg-blue-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"}`}>
-              {scanning ? "Scanner..." : "Oppdater nÃ¥"}
+              {scanning ? "Scanner..." : "Oppdater nå"}
             </button>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default function Home() {
       <main className="max-w-5xl mx-auto px-6 py-6">
         {scanResult && (
           <div className={`mb-4 p-3 rounded-lg text-sm ${scanResult.error ? "bg-red-50 text-red-700" : scanResult.newContent > 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
-            {scanResult.error ? `Feil: ${scanResult.error}` : scanResult.breakdown ? `SoMe-scan: ${scanResult.stores} butikker â ${scanResult.newContent} nye (${scanResult.breakdown.instagram || 0} IG, ${scanResult.breakdown.facebook || 0} FB)` : `Scannet ${scanResult.stores} butikker â fant ${scanResult.newContent} nye innholdselementer`}
+            {scanResult.error ? `Feil: ${scanResult.error}` : scanResult.breakdown ? `SoMe-scan: ${scanResult.stores} butikker — ${scanResult.newContent} nye (${scanResult.breakdown.instagram || 0} IG, ${scanResult.breakdown.facebook || 0} FB)` : `Scannet ${scanResult.stores} butikker — fant ${scanResult.newContent} nye innholdselementer`}
           </div>
         )}
 
@@ -151,8 +151,8 @@ export default function Home() {
           <div className="text-center py-20 text-gray-400">Laster innhold...</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-400 mb-2">Ingen innholdsforslag ennÃ¥</p>
-            <p className="text-sm text-gray-400">Klikk Â«Oppdater nÃ¥Â» for Ã¥ starte scanning</p>
+            <p className="text-gray-400 mb-2">Ingen innholdsforslag ennå</p>
+            <p className="text-sm text-gray-400">Klikk «Oppdater nå» for å starte scanning</p>
           </div>
         ) : (
           <div className="space-y-3">
