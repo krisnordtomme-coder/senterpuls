@@ -5,10 +5,13 @@ import SuggestionCard from "../components/SuggestionCard"
 import PublishingPlan from "../components/PublishingPlan"
 
 const CATEGORIES = ["Alle", "kampanje", "produktlansering", "event", "sesong", "baerekraft", "nyhet"]
-const CAT_LABELS = { kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event", sesong: "Sesong", baerekraft: "Bærekraft", nyhet: "Nyhet" }
+const CAT_LABELS = {
+  kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event",
+  sesong: "Sesong", baerekraft: "Bærekraft", nyhet: "Nyhet"
+}
 const SOURCES = ["Alle", "website", "instagram", "facebook"]
 const SOURCE_LABELS = { website: "Nettside", instagram: "Instagram", facebook: "Facebook" }
-const SOURCE_ICONS = { instagram: "\u{1F4F7}", facebook: "\u{1F4AC}", website: "\u{1F310}" }
+const SOURCE_ICONS = { instagram: "📷", facebook: "💬", website: "🌐" }
 
 export default function Home() {
   const [suggestions, setSuggestions] = useState([])
@@ -41,8 +44,7 @@ export default function Home() {
   }
 
   async function runScan() {
-    setScanning(true)
-    setScanResult(null)
+    setScanning(true); setScanResult(null)
     try {
       const res = await fetch("/api/scrape", { method: "POST" })
       const data = await res.json()
@@ -54,8 +56,7 @@ export default function Home() {
   }
 
   async function runSocialScan() {
-    setScanningSocial(true)
-    setScanResult(null)
+    setScanningSocial(true); setScanResult(null)
     try {
       const res = await fetch("/api/scrape-social", { method: "POST" })
       const data = await res.json()
@@ -83,84 +84,111 @@ export default function Home() {
       return (b.relevance_score || 0) - (a.relevance_score || 0)
     })
 
+  const STAT_ITEMS = [
+    { label: "Totalt", value: stats.total, icon: "📊" },
+    { label: "Aktive", value: stats.active, icon: "✨" },
+    { label: "Venter", value: stats.pending, icon: "⏳" },
+    { label: "Publisert", value: stats.published, icon: "✓" }
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <div className="min-h-screen" style={{ background: "#FDF5FD" }}>
+      <header className="border-b px-6 py-5" style={{ background: "#FAE4FB", borderColor: "#E7E1E3" }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Senter<span className="text-blue-600">Puls</span></h1>
-            <p className="text-sm text-gray-500">Værstetorvet · {stores.length} leietakere</p>
+            <h1 className="text-2xl tracking-tight" style={{ fontFamily: "var(--font-heading, 'DM Serif Display'), Georgia, serif", color: "#360817" }}>
+              {"Senter"}<span style={{ color: "#9333ea" }}>{"Puls"}</span>
+            </h1>
+            <p className="text-sm mt-0.5" style={{ color: "#360817", opacity: 0.6 }}>
+              {"Værstetorvet · "}{stores.length}{" leietakere"}
+            </p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={runSocialScan} disabled={scanningSocial} className={`px-4 py-2 text-sm rounded-lg transition ${scanningSocial ? "bg-pink-400 text-white cursor-wait" : "bg-pink-50 text-pink-700 border border-pink-200 hover:bg-pink-100"}`}>
-              {scanningSocial ? "Scanner SoMe..." : "\u{1F4F1} SoMe-scan"}
+          <div className="flex gap-3">
+            <button onClick={runSocialScan} disabled={scanningSocial}
+              className="px-5 py-2.5 text-sm font-medium transition-all duration-200"
+              style={{ borderRadius: "6px", background: scanningSocial ? "#D6C7FF" : "white", color: "#360817", border: "1px solid #E7E1E3", cursor: scanningSocial ? "wait" : "pointer", opacity: scanningSocial ? 0.7 : 1 }}>
+              {scanningSocial ? "Scanner SoMe..." : "📱 SoMe-scan"}
             </button>
-            <button onClick={runScan} disabled={scanning} className={`px-4 py-2 text-white text-sm rounded-lg transition ${scanning ? "bg-blue-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"}`}>
+            <button onClick={runScan} disabled={scanning}
+              className="px-5 py-2.5 text-sm font-medium transition-all duration-200"
+              style={{ borderRadius: "6px", background: scanning ? "#5a1a2e" : "#360817", color: "#FAE4FB", cursor: scanning ? "wait" : "pointer" }}>
               {scanning ? "Scanner..." : "Oppdater nå"}
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-6">
+      <main className="max-w-5xl mx-auto px-6 py-8">
         {scanResult && (
-          <div className={`mb-4 p-3 rounded-lg text-sm ${scanResult.error ? "bg-red-50 text-red-700" : scanResult.newContent > 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
-            {scanResult.error ? `Feil: ${scanResult.error}` : scanResult.breakdown ? `SoMe-scan: ${scanResult.stores} butikker — ${scanResult.newContent} nye (${scanResult.breakdown.instagram || 0} IG, ${scanResult.breakdown.facebook || 0} FB)` : `Scannet ${scanResult.stores} butikker — fant ${scanResult.newContent} nye innholdselementer`}
+          <div className="mb-6 p-4 text-sm" style={{
+            borderRadius: "14px",
+            background: scanResult.error ? "#FEE2E2" : scanResult.newContent > 0 ? "#FAFFED" : "#FEF3C7",
+            color: scanResult.error ? "#991B1B" : scanResult.newContent > 0 ? "#360817" : "#92400E",
+            border: scanResult.error ? "1px solid #FECACA" : scanResult.newContent > 0 ? "1px solid #D4FF66" : "1px solid #FDE68A",
+          }}>
+            {scanResult.error ? `Feil: ${scanResult.error}` :
+              scanResult.breakdown ? `SoMe-scan: ${scanResult.stores} butikker — ${scanResult.newContent} nye (${scanResult.breakdown.instagram || 0} IG, ${scanResult.breakdown.facebook || 0} FB)` :
+              `Scannet ${scanResult.stores} butikker — fant ${scanResult.newContent} nye innholdselementer`}
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          {[
-            { label: "Totalt", value: stats.total, color: "text-blue-600" },
-            { label: "Aktive", value: stats.active, color: "text-green-600" },
-            { label: "Venter", value: stats.pending, color: "text-amber-600" },
-            { label: "Publisert", value: stats.published, color: "text-gray-900" }
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-lg p-4 border border-gray-100">
-              <p className="text-xs text-gray-500">{s.label}</p>
-              <p className={`text-2xl font-semibold ${s.color}`}>{s.value}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {STAT_ITEMS.map(s => (
+            <div key={s.label} className="p-5 transition-all duration-200 hover:shadow-md"
+              style={{ background: "white", borderRadius: "14px", border: "1px solid #E7E1E3" }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "#360817", opacity: 0.5 }}>{s.label}</p>
+                <span className="text-lg">{s.icon}</span>
+              </div>
+              <p className="text-3xl font-light" style={{ fontFamily: "var(--font-heading, 'DM Serif Display'), Georgia, serif", color: "#360817" }}>{s.value}</p>
             </div>
           ))}
         </div>
 
-{!loading && suggestions.length > 0 && (
-            <PublishingPlan suggestions={suggestions} />
-          )}
+        {!loading && suggestions.length > 0 && <PublishingPlan suggestions={suggestions} />}
 
         <div className="flex gap-2 mb-3 flex-wrap">
           {CATEGORIES.map(c => (
-            <button key={c} onClick={() => setFilter(c)} className={`px-3 py-1.5 text-xs rounded-full border transition ${filter === c ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+            <button key={c} onClick={() => setFilter(c)}
+              className="px-4 py-2 text-xs font-medium transition-all duration-200"
+              style={{ borderRadius: "20px", background: filter === c ? "#360817" : "white", color: filter === c ? "#FAE4FB" : "#360817", border: filter === c ? "1px solid #360817" : "1px solid #E7E1E3" }}>
               {c === "Alle" ? "Alle" : CAT_LABELS[c] || c}
             </button>
           ))}
         </div>
 
-        <div className="flex gap-2 mb-5 flex-wrap items-center">
+        <div className="flex gap-2 mb-6 flex-wrap items-center">
           {SOURCES.map(s => (
-            <button key={s} onClick={() => setSourceFilter(s)} className={`px-3 py-1.5 text-xs rounded-full border transition ${sourceFilter === s ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+            <button key={s} onClick={() => setSourceFilter(s)}
+              className="px-4 py-2 text-xs font-medium transition-all duration-200"
+              style={{ borderRadius: "20px", background: sourceFilter === s ? "#D6C7FF" : "white", color: "#360817", border: sourceFilter === s ? "1px solid #D6C7FF" : "1px solid #E7E1E3" }}>
               {s === "Alle" ? "Alle kilder" : `${SOURCE_ICONS[s] || ""} ${SOURCE_LABELS[s] || s}`}
             </button>
           ))}
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className="text-xs text-gray-400">Sorter:</span>
-            <button onClick={() => setSortBy("relevans")} className={`px-2.5 py-1 text-xs rounded-md transition ${sortBy === "relevans" ? "bg-gray-800 text-white" : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"}`}>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs" style={{ color: "#360817", opacity: 0.4 }}>Sorter:</span>
+            <button onClick={() => setSortBy("relevans")}
+              className="px-3 py-1.5 text-xs font-medium transition-all duration-200"
+              style={{ borderRadius: "6px", background: sortBy === "relevans" ? "#360817" : "white", color: sortBy === "relevans" ? "#FAE4FB" : "#360817", border: sortBy === "relevans" ? "none" : "1px solid #E7E1E3" }}>
               Relevans
             </button>
-            <button onClick={() => setSortBy("dato")} className={`px-2.5 py-1 text-xs rounded-md transition ${sortBy === "dato" ? "bg-gray-800 text-white" : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"}`}>
+            <button onClick={() => setSortBy("dato")}
+              className="px-3 py-1.5 text-xs font-medium transition-all duration-200"
+              style={{ borderRadius: "6px", background: sortBy === "dato" ? "#360817" : "white", color: sortBy === "dato" ? "#FAE4FB" : "#360817", border: sortBy === "dato" ? "none" : "1px solid #E7E1E3" }}>
               Nyeste
             </button>
           </div>
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400">Laster innhold...</div>
+          <div className="text-center py-24" style={{ color: "#360817", opacity: 0.4 }}>Laster innhold...</div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-gray-400 mb-2">Ingen innholdsforslag ennå</p>
-            <p className="text-sm text-gray-400">Klikk «Oppdater nå» for å starte scanning</p>
+          <div className="text-center py-24">
+            <p className="mb-2" style={{ color: "#360817", opacity: 0.4 }}>Ingen innholdsforslag ennå</p>
+            <p className="text-sm" style={{ color: "#360817", opacity: 0.3 }}>{"Klikk «Oppdater nå» for å starte scanning"}</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {filtered.map(s => <SuggestionCard key={s.id} suggestion={s} onUpdateStatus={updateStatus} />)}
           </div>
         )}
