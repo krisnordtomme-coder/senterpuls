@@ -3,11 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --brand-primary: #2563eb;
-  --brand-dark: #1B3A5C;
+  --brand-lavender: #FAE4FB;
+  --brand-burgundy: #360817;
+  --brand-purple: #D6C7FF;
+  --brand-neutral: #E7E1E3;
+  --brand-lime: #D4FF66;
+  --brand-light-green: #FAFFED;
+  --brand-dark: #121226;
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #f8fafc;
+  font-family: var(--font-body), 'DM Sans', system-ui, -apple-system, sans-serif;
+  background: #FDF5FD;
+  color: #360817;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading), 'DM Serif Display', Georgia, serif;
 }
