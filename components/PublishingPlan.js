@@ -251,7 +251,7 @@ export default function PublishingPlan({ suggestions }) {
                         </span>
                       </div>
                       <p className="text-xs text-gray-700 line-clamp-2 mb-1.5">
-                        {item.suggested_text || item.content?.original_text?.substring(0, 120)}
+                        {(typeof item.suggested_text === 'string' ? item.suggested_text : item.suggested_text?.website || item.suggested_text?.instagram || item.suggested_text?.facebook) || item.content?.original_text?.substring(0, 120)}
                       </p>
                       <p className="text-[10px] text-amber-700 font-medium">
                         {cv.isUrgent ? "\u26A1 " : "\u2192 "}
