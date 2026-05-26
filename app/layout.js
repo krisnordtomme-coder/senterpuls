@@ -1,5 +1,6 @@
 import { DM_Sans, DM_Serif_Display } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/components/AuthProvider"
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -15,14 +16,18 @@ const dmSerif = DM_Serif_Display({
 })
 
 export const metadata = {
-  title: "SenterPuls – Værstetorvet",
-  description: "Intelligent innholdsscanner for Værstetorvet",
+  title: "SenterPuls",
+  description: "Intelligent innholdsscanner for kj\u00f8pesentre",
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="no" className={`${dmSans.variable} ${dmSerif.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }
