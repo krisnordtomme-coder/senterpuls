@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../lib/supabase"
 import SuggestionCard from "../components/SuggestionCard"
+import PublishingPlan from "../components/PublishingPlan"
 
 const CATEGORIES = ["Alle", "kampanje", "produktlansering", "event", "sesong", "baerekraft", "nyhet"]
 const CAT_LABELS = { kampanje: "Kampanje", produktlansering: "Produktlansering", event: "Event", sesong: "Sesong", baerekraft: "Bærekraft", nyhet: "Nyhet" }
@@ -121,6 +122,10 @@ export default function Home() {
             </div>
           ))}
         </div>
+
+{!loading && suggestions.length > 0 && (
+            <PublishingPlan suggestions={suggestions} />
+          )}
 
         <div className="flex gap-2 mb-3 flex-wrap">
           {CATEGORIES.map(c => (
