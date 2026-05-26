@@ -156,7 +156,7 @@ export default function PublishingPlan({ suggestions }) {
     return (
       <div className="mb-6 bg-white rounded-xl border border-gray-200 px-5 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-base">\u{1F4C5}</span>
+          <span className="text-base">{"📅"}</span>
           <span className="text-sm font-medium text-gray-700">Publiseringsplan</span>
           <span className="text-xs text-gray-400">({totalPlanned} anbefalinger neste 3 dager)</span>
         </div>
