@@ -41,9 +41,7 @@ export default function AdminPage() {
     try {
       const { data } = await supabase.from("centers").select("*").eq("organization_id", orgId).order("name")
       setCenters(data || [])
-    } catch (err) {
-      console.error("fetchCenters:", err)
-    }
+    } catch (err) { console.error("fetchCenters:", err) }
   }
 
   async function fetchTeam(orgId) {
@@ -59,18 +57,14 @@ export default function AdminPage() {
         }
       }
       setTeamMembers(data || [])
-    } catch (err) {
-      console.error("fetchTeam:", err)
-    }
+    } catch (err) { console.error("fetchTeam:", err) }
   }
 
   async function fetchInvitations(orgId) {
     try {
       const { data } = await supabase.from("invitations").select("*").eq("organization_id", orgId).is("accepted_at", null)
       setInvitations(data || [])
-    } catch (err) {
-      console.error("fetchInvitations:", err)
-    }
+    } catch (err) { console.error("fetchInvitations:", err) }
   }
 
   async function createOrganization() {
@@ -92,9 +86,7 @@ export default function AdminPage() {
     } catch (err) {
       console.error("createOrganization:", err)
       setError("Noe gikk galt: " + err.message)
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   async function createCenter() {
@@ -112,9 +104,7 @@ export default function AdminPage() {
       setNewCenterName("")
       setNewCenterCity("")
       fetchCenters(currentOrg.id)
-    } catch (err) {
-      console.error("createCenter:", err)
-    }
+    } catch (err) { console.error("createCenter:", err) }
     setSaving(false)
   }
 
@@ -131,9 +121,7 @@ export default function AdminPage() {
       setShowInvite(false)
       setInviteEmail("")
       fetchInvitations(currentOrg.id)
-    } catch (err) {
-      console.error("sendInvitation:", err)
-    }
+    } catch (err) { console.error("sendInvitation:", err) }
     setSaving(false)
   }
 
@@ -160,16 +148,11 @@ export default function AdminPage() {
           <h1 style={{ fontFamily: "var(--font-heading)", fontSize: "1.4rem", margin: 0, cursor: "pointer" }} onClick={() => router.push("/")}>SenterPuls</h1>
           <span style={{ opacity: 0.4 }}>|</span>
           <span style={{ fontSize: "0.85rem", opacity: 0.7 }}>Admin</span>
+          <button onClick={() => router.push("/")} style={{ background: "rgba(212,255,102,0.15)", border: "1px solid rgba(212,255,102,0.3)", color: "#D4FF66", padding: "0.35rem 0.9rem", borderRadius: "8px", cursor: "pointer", fontSize: "0.8rem", fontWeight: 500, transition: "all 0.2s" }}>&larr; Dashboard</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           {memberships.length > 0 && (
-            <select
-              value={currentOrg?.id || ""}
-              onChange={e => {
-                const m = memberships.find(m => m.organization_id === e.target.value);
-                if (m) setCurrentOrg(m.organizations)
-              }}
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "white", padding: "0.4rem 0.8rem", borderRadius: "8px", fontSize: "0.85rem" }}>
+            <select value={currentOrg?.id || ""} onChange={e => { const m = memberships.find(m => m.organization_id === e.target.value); if (m) setCurrentOrg(m.organizations) }} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "white", padding: "0.4rem 0.8rem", borderRadius: "8px", fontSize: "0.85rem" }}>
               {memberships.map(m => (<option key={m.organization_id} value={m.organization_id} style={{ color: "#121226" }}>{m.organizations?.name}</option>))}
             </select>
           )}
@@ -343,4 +326,4 @@ export default function AdminPage() {
       </div>
     </div>
   )
-              }
+                }
