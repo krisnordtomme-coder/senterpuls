@@ -17,105 +17,49 @@ export function AuthProvider({ children }) {
     if (initialized.current) return
     initialized.current = true
 
-    async function init() {
-      try {
-        // Race getSession against a 4-second timeout
-        const result = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("getSession_timeout")), 4000)
-          )
-        ])
-
-        const { data, error } = result
-        if (error) {
-          console.error("getSession error:", error.message)
-          setLoading(false)
-          return
-        }
-        const session = data?.session
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          await initializeUser(session.user.id)
-        }
-      } catch (err) {
-        console.warn("Auth init error/timeout:", err.message)
-        // If getSession hung, try to recover session from localStorage
-        if (err.message === "getSession_timeout") {
-          try {
-            const storageKey = Object.keys(localStorage).find(
-              k => k.includes("supabase") && k.includes("auth")
-            )
-            if (storageKey) {
-              const stored = JSON.parse(localStorage.getItem(storageKey))
-              if (stored?.access_token && stored?.refresh_token) {
-                console.log("Recovering session from localStorage via setSession")
-                // Use setSession to properly authenticate the Supabase client
-                const { data: sessionData, error: sessionError } = await Promise.race([
-                  supabase.auth.setSession({
-                    access_token: stored.access_token,
-                    refresh_token: stored.refresh_token
-                  }),
-                  new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("setSession_timeout")), 3000)
-                  )
-                ])
-                if (!sessionError && sessionData?.session?.user) {
-                  console.log("Session recovered successfully via setSession")
-                  setUser(sessionData.session.user)
-                  await initializeUser(sessionData.session.user.id)
-                } else if (stored?.user) {
-                  // Fallback: at least set the user for UI display
-                  console.warn("setSession failed, using user from localStorage for display")
-                  setUser(stored.user)
-                }
-              } else if (stored?.user) {
-                console.warn("No tokens in localStorage, using user for display only")
-                setUser(stored.user)
-              }
-            }
-          } catch (recoveryErr) {
-            console.error("Session recovery failed:", recoveryErr)
-          }
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    init()
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log("Auth state change:", event)
-        setUser(session?.user ?? null)
+        console.log("Auth state change:", event, session?.user?.email)
         if (session?.user) {
+          setUser(session.user)
           try {
             await initializeUser(session.user.id)
           } catch (err) {
-            console.error("Auth state change init error:", err)
+            console.error("initializeUser error:", err)
           }
         } else {
+          setUser(null)
           setProfile(null)
           setMemberships([])
           setCurrentOrg(null)
           setCurrentCenter(null)
         }
+        setLoading(false)
       }
     )
 
+    const safetyTimeout = setTimeout(() => {
+      setLoading(prev => {
+        if (prev) {
+          console.log("Safety timeout - no auth event received")
+          return false
+        }
+        return prev
+      })
+    }, 6000)
+
     return () => {
       subscription.unsubscribe()
+      clearTimeout(safetyTimeout)
     }
   }, [])
 
   async function initializeUser(userId) {
-    try {
-      await fetchProfile(userId)
-      await fetchMemberships(userId)
-    } catch (err) {
-      console.error("Error initializing user:", err)
-    }
+    console.log("initializeUser called for:", userId)
+    await Promise.all([
+      fetchProfile(userId),
+      fetchMemberships(userId)
+    ])
   }
 
   async function fetchProfile(userId) {
@@ -125,47 +69,70 @@ export function AuthProvider({ children }) {
         .select("*")
         .eq("id", userId)
         .single()
-      if (error) throw error
+      if (error) {
+        console.error("fetchProfile error:", error.message)
+        return
+      }
       setProfile(data)
     } catch (err) {
-      console.error("Error fetching profile:", err)
+      console.error("fetchProfile exception:", err)
     }
   }
 
   async function fetchMemberships(userId) {
     try {
+      console.log("fetchMemberships called for:", userId)
       const { data, error } = await supabase
         .from("memberships")
-        .select("*, organizations(*)")
+        .select(`
+          id,
+          role,
+          organization_id,
+          organizations (
+            id,
+            name,
+            slug
+          )
+        `)
         .eq("user_id", userId)
+
       if (error) {
-        console.warn("Embedded select failed, using fallback:", error.message)
-        const { data: mData } = await supabase
+        console.error("fetchMemberships error:", error.message)
+        const { data: simpleData, error: simpleError } = await supabase
           .from("memberships")
-          .select("*")
+          .select("id, role, organization_id")
           .eq("user_id", userId)
-        if (mData?.length > 0) {
-          const orgIds = [...new Set(mData.map(m => m.organization_id))]
-          const { data: orgData } = await supabase
-            .from("organizations")
-            .select("*")
-            .in("id", orgIds)
-          const enriched = mData.map(m => ({
-            ...m,
-            organizations: orgData?.find(o => o.id === m.organization_id) || null
-          }))
-          setMemberships(enriched)
-          if (enriched.length > 0 && !currentOrg) setCurrentOrg(enriched[0].organizations)
+
+        if (simpleError) {
+          console.error("fetchMemberships fallback error:", simpleError.message)
           return
         }
-        setMemberships([])
+        console.log("fetchMemberships fallback data:", simpleData)
+        setMemberships(simpleData || [])
+
+        if (simpleData && simpleData.length > 0) {
+          const { data: orgData } = await supabase
+            .from("organizations")
+            .select("id, name, slug")
+            .eq("id", simpleData[0].organization_id)
+            .single()
+          if (orgData) {
+            setCurrentOrg(orgData)
+          }
+        }
         return
       }
+
+      console.log("fetchMemberships data:", JSON.stringify(data))
       setMemberships(data || [])
-      if (data?.length > 0 && !currentOrg) setCurrentOrg(data[0].organizations)
+      if (data && data.length > 0) {
+        const firstOrg = data[0].organizations
+        if (firstOrg) {
+          setCurrentOrg(firstOrg)
+        }
+      }
     } catch (err) {
-      console.error("Error fetching memberships:", err)
-      setMemberships([])
+      console.error("fetchMemberships exception:", err)
     }
   }
 
@@ -176,28 +143,27 @@ export function AuthProvider({ children }) {
 
   async function signUp(email, password, fullName) {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } }
+      email, password,
+      options: { data: { full_name: fullName } },
     })
     return { data, error }
   }
 
   async function signInWithMagicLink(email) {
-    const { data, error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin + "/auth/callback" }
-    })
+    const { data, error } = await supabase.auth.signInWithOtp({ email })
     return { data, error }
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
-    setUser(null)
-    setProfile(null)
-    setMemberships([])
-    setCurrentOrg(null)
-    setCurrentCenter(null)
+    const { error } = await supabase.auth.signOut()
+    if (!error) {
+      setUser(null)
+      setProfile(null)
+      setMemberships([])
+      setCurrentOrg(null)
+      setCurrentCenter(null)
+    }
+    return { error }
   }
 
   const membership = memberships.find(m => m.organization_id === currentOrg?.id)
@@ -207,12 +173,10 @@ export function AuthProvider({ children }) {
   const value = {
     user, profile, memberships, currentOrg, setCurrentOrg,
     currentCenter, setCurrentCenter, loading, isOwner, isAdmin,
-    signIn, signUp, signInWithMagicLink, signOut
+    signIn, signUp, signInWithMagicLink, signOut,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export function useAuth() {
-  return useContext(AuthContext)
-}
+export const useAuth = () => useContext(AuthContext)
