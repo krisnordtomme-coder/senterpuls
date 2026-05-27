@@ -17,21 +17,20 @@ export function AuthProvider({ children }) {
     if (initialized.current) return
     initialized.current = true
 
-    // Safety timeout - never stay loading for more than 5 seconds
-    const timeout = setTimeout(() => {
-      setLoading(prev => {
-        if (prev) console.warn("Auth loading timeout - forcing load complete")
-        return false
-      })
-    }, 5000)
-
     async function init() {
       try {
-        const { data, error } = await supabase.auth.getSession()
+        // Race getSession against a 4-second timeout
+        const result = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("getSession_timeout")), 4000)
+          )
+        ])
+
+        const { data, error } = result
         if (error) {
           console.error("getSession error:", error.message)
           setLoading(false)
-          clearTimeout(timeout)
           return
         }
         const session = data?.session
@@ -40,10 +39,31 @@ export function AuthProvider({ children }) {
           await initializeUser(session.user.id)
         }
       } catch (err) {
-        console.error("Auth init error:", err)
+        console.warn("Auth init error/timeout:", err.message)
+        // If getSession hung, try to recover from localStorage
+        if (err.message === "getSession_timeout") {
+          try {
+            const storageKey = Object.keys(localStorage).find(
+              k => k.includes("supabase") && k.includes("auth")
+            )
+            if (storageKey) {
+              const stored = JSON.parse(localStorage.getItem(storageKey))
+              if (stored?.user) {
+                console.log("Recovered user from localStorage after timeout")
+                setUser(stored.user)
+                try {
+                  await initializeUser(stored.user.id)
+                } catch (initErr) {
+                  console.error("initializeUser after recovery failed:", initErr)
+                }
+              }
+            }
+          } catch (recoveryErr) {
+            console.error("localStorage recovery failed:", recoveryErr)
+          }
+        }
       } finally {
         setLoading(false)
-        clearTimeout(timeout)
       }
     }
 
@@ -69,7 +89,6 @@ export function AuthProvider({ children }) {
 
     return () => {
       subscription.unsubscribe()
-      clearTimeout(timeout)
     }
   }, [])
 
@@ -84,7 +103,11 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(userId) {
     try {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single()
       if (error) throw error
       setProfile(data)
     } catch (err) {
@@ -94,13 +117,22 @@ export function AuthProvider({ children }) {
 
   async function fetchMemberships(userId) {
     try {
-      const { data, error } = await supabase.from("memberships").select("*, organizations(*)").eq("user_id", userId)
+      const { data, error } = await supabase
+        .from("memberships")
+        .select("*, organizations(*)")
+        .eq("user_id", userId)
       if (error) {
         console.warn("Embedded select failed, using fallback:", error.message)
-        const { data: mData } = await supabase.from("memberships").select("*").eq("user_id", userId)
+        const { data: mData } = await supabase
+          .from("memberships")
+          .select("*")
+          .eq("user_id", userId)
         if (mData?.length > 0) {
           const orgIds = [...new Set(mData.map(m => m.organization_id))]
-          const { data: orgData } = await supabase.from("organizations").select("*").in("id", orgIds)
+          const { data: orgData } = await supabase
+            .from("organizations")
+            .select("*")
+            .in("id", orgIds)
           const enriched = mData.map(m => ({
             ...m,
             organizations: orgData?.find(o => o.id === m.organization_id) || null
@@ -156,20 +188,9 @@ export function AuthProvider({ children }) {
   const isAdmin = isOwner || membership?.role === "admin"
 
   const value = {
-    user,
-    profile,
-    memberships,
-    currentOrg,
-    setCurrentOrg,
-    currentCenter,
-    setCurrentCenter,
-    loading,
-    isOwner,
-    isAdmin,
-    signIn,
-    signUp,
-    signInWithMagicLink,
-    signOut
+    user, profile, memberships, currentOrg, setCurrentOrg,
+    currentCenter, setCurrentCenter, loading, isOwner, isAdmin,
+    signIn, signUp, signInWithMagicLink, signOut
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
