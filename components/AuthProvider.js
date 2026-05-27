@@ -1,6 +1,6 @@
 "use client"
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, supabaseDirectRpc } from "@/lib/supabase"
 
 const AuthContext = createContext({})
 
@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
     try {
       console.log("fetchMemberships called for:", userId)
       const { data, error } = await withTimeout(
-        supabase.rpc('get_my_memberships')
+        supabaseDirectRpc('get_my_memberships')
       )
       if (error) {
         console.error("fetchMemberships error:", error.message)
