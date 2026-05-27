@@ -175,7 +175,7 @@ export default function CenterSettingsPage() {
     const newOnes = toImport.filter(t => !existing.has(t.name.toLowerCase()))
     if (newOnes.length > 0) {
       await supabase.from("center_tenants").insert(
-        newOnes.map(t => ({ center_id: centerId, name: t.name, category: null, url: null }))
+        newOnes.map(t => ({ center_id: centerId, name: t.name, category: null, url: t.url || null }))
       )
     }
     const { data } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name")
@@ -481,7 +481,10 @@ export default function CenterSettingsPage() {
                   {scrapeResults.map((t, i) => (
                     <label key={i} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 1rem", borderBottom: i < scrapeResults.length - 1 ? "1px solid #f0f0f0" : "none", cursor: "pointer", background: selectedScrape[i] ? "#f0eeff" : "white" }}>
                       <input type="checkbox" checked={!!selectedScrape[i]} onChange={e => setSelectedScrape(prev => ({ ...prev, [i]: e.target.checked }))} />
-                      <span style={{ fontSize: "0.9rem", color: "#360817" }}>{t.name}</span>
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontSize: "0.9rem", color: "#360817" }}>{t.name}</span>
+                        {t.url && <span style={{ fontSize: "0.7rem", color: "#999", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}>{t.url}</span>}
+                      </div>
                     </label>
                   ))}
                 </div>
