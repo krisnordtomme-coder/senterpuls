@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 export default function AdminPage() {
   const { user, profile, memberships, currentOrg, setCurrentOrg, isAdmin, isOwner, signOut, loading, refreshMemberships } = useAuth()
   const router = useRouter()
+
   const [tab, setTab] = useState("centers")
   const [centers, setCenters] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
@@ -26,26 +27,30 @@ export default function AdminPage() {
     if (!loading && !user) router.push("/login")
   }, [user, loading])
 
+  // Re-fetch all data when org changes — use primitive ID for reliable comparison
   useEffect(() => {
-    if (currentOrg) {
-      fetchCenters()
-      fetchTeam()
-      fetchInvitations()
+    if (currentOrg?.id) {
+      const orgId = currentOrg.id
+      fetchCenters(orgId)
+      fetchTeam(orgId)
+      fetchInvitations(orgId)
     }
-  }, [currentOrg])
+  }, [currentOrg?.id])
 
-  async function fetchCenters() {
+  async function fetchCenters(orgId) {
     try {
-      const { data } = await supabase.from("centers").select("*").eq("organization_id", currentOrg.id).order("name")
+      const { data } = await supabase.from("centers").select("*").eq("organization_id", orgId).order("name")
       setCenters(data || [])
-    } catch (err) { console.error("fetchCenters:", err) }
+    } catch (err) {
+      console.error("fetchCenters:", err)
+    }
   }
 
-  async function fetchTeam() {
+  async function fetchTeam(orgId) {
     try {
-      const { data, error } = await supabase.from("memberships").select("*, profiles(*)").eq("organization_id", currentOrg.id)
+      const { data, error } = await supabase.from("memberships").select("*, profiles(*)").eq("organization_id", orgId)
       if (error) {
-        const { data: mData } = await supabase.from("memberships").select("*").eq("organization_id", currentOrg.id)
+        const { data: mData } = await supabase.from("memberships").select("*").eq("organization_id", orgId)
         if (mData) {
           const userIds = [...new Set(mData.map(m => m.user_id))]
           const { data: pData } = await supabase.from("profiles").select("*").in("id", userIds)
@@ -54,14 +59,18 @@ export default function AdminPage() {
         }
       }
       setTeamMembers(data || [])
-    } catch (err) { console.error("fetchTeam:", err) }
+    } catch (err) {
+      console.error("fetchTeam:", err)
+    }
   }
 
-  async function fetchInvitations() {
+  async function fetchInvitations(orgId) {
     try {
-      const { data } = await supabase.from("invitations").select("*").eq("organization_id", currentOrg.id).is("accepted_at", null)
+      const { data } = await supabase.from("invitations").select("*").eq("organization_id", orgId).is("accepted_at", null)
       setInvitations(data || [])
-    } catch (err) { console.error("fetchInvitations:", err) }
+    } catch (err) {
+      console.error("fetchInvitations:", err)
+    }
   }
 
   async function createOrganization() {
@@ -89,45 +98,59 @@ export default function AdminPage() {
   }
 
   async function createCenter() {
-    if (!newCenterName.trim()) return
+    if (!newCenterName.trim() || !currentOrg?.id) return
     setSaving(true)
     try {
       const slug = newCenterName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
-      await supabase.from("centers").insert({ organization_id: currentOrg.id, name: newCenterName.trim(), slug, city: newCenterCity.trim() || null })
+      await supabase.from("centers").insert({
+        organization_id: currentOrg.id,
+        name: newCenterName.trim(),
+        slug,
+        city: newCenterCity.trim() || null
+      })
       setShowNewCenter(false)
       setNewCenterName("")
       setNewCenterCity("")
-      fetchCenters()
-    } catch (err) { console.error("createCenter:", err) }
+      fetchCenters(currentOrg.id)
+    } catch (err) {
+      console.error("createCenter:", err)
+    }
     setSaving(false)
   }
 
   async function sendInvitation() {
-    if (!inviteEmail.trim()) return
+    if (!inviteEmail.trim() || !currentOrg?.id) return
     setSaving(true)
     try {
-      await supabase.from("invitations").insert({ organization_id: currentOrg.id, email: inviteEmail.trim().toLowerCase(), role: inviteRole, invited_by: user.id })
+      await supabase.from("invitations").insert({
+        organization_id: currentOrg.id,
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        invited_by: user.id
+      })
       setShowInvite(false)
       setInviteEmail("")
-      fetchInvitations()
-    } catch (err) { console.error("sendInvitation:", err) }
+      fetchInvitations(currentOrg.id)
+    } catch (err) {
+      console.error("sendInvitation:", err)
+    }
     setSaving(false)
   }
 
   async function deleteInvitation(id) {
     await supabase.from("invitations").delete().eq("id", id)
-    fetchInvitations()
+    if (currentOrg?.id) fetchInvitations(currentOrg.id)
   }
 
   async function toggleCenterActive(center) {
     await supabase.from("centers").update({ active: !center.active }).eq("id", center.id)
-    fetchCenters()
+    if (currentOrg?.id) fetchCenters(currentOrg.id)
   }
 
   if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#FAE4FB" }}><p>Laster...</p></div>
   if (!user) return null
 
-  const roleLabels = { eier: "Eier", admin: "Admin", redaktor: "Redaktør", leser: "Leser" }
+  const roleLabels = { eier: "Eier", admin: "Admin", redaktor: "Redakt\u00f8r", leser: "Leser" }
   const roleColors = { eier: "#D4FF66", admin: "#D6C7FF", redaktor: "#FAE4FB", leser: "#E7E1E3" }
 
   return (
@@ -140,7 +163,13 @@ export default function AdminPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           {memberships.length > 0 && (
-            <select value={currentOrg?.id || ""} onChange={e => { const m = memberships.find(m => m.organization_id === e.target.value); if (m) setCurrentOrg(m.organizations) }} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "white", padding: "0.4rem 0.8rem", borderRadius: "8px", fontSize: "0.85rem" }}>
+            <select
+              value={currentOrg?.id || ""}
+              onChange={e => {
+                const m = memberships.find(m => m.organization_id === e.target.value);
+                if (m) setCurrentOrg(m.organizations)
+              }}
+              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "white", padding: "0.4rem 0.8rem", borderRadius: "8px", fontSize: "0.85rem" }}>
               {memberships.map(m => (<option key={m.organization_id} value={m.organization_id} style={{ color: "#121226" }}>{m.organizations?.name}</option>))}
             </select>
           )}
@@ -153,7 +182,7 @@ export default function AdminPage() {
         {memberships.length === 0 && !showNewOrg && (
           <div style={{ background: "white", borderRadius: "20px", padding: "3rem", textAlign: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.06)" }}>
             <h2 style={{ fontFamily: "var(--font-heading)", color: "#360817", fontSize: "1.6rem" }}>Velkommen til SenterPuls!</h2>
-            <p style={{ color: "#360817", opacity: 0.7, marginBottom: "1.5rem" }}>Opprett en organisasjon for å komme i gang.</p>
+            <p style={{ color: "#360817", opacity: 0.7, marginBottom: "1.5rem" }}>Opprett en organisasjon for \u00e5 komme i gang.</p>
             <button onClick={() => setShowNewOrg(true)} style={{ background: "#D4FF66", color: "#121226", border: "none", padding: "0.8rem 2rem", borderRadius: "12px", fontWeight: 600, cursor: "pointer", fontSize: "1rem" }}>+ Opprett organisasjon</button>
           </div>
         )}
@@ -174,10 +203,10 @@ export default function AdminPage() {
           <>
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
               {[
-                { key: "centers", label: "Sentre", icon: "🏬" },
-                { key: "team", label: "Team", icon: "👥" },
-                { key: "invitations", label: "Invitasjoner", icon: "✉️" },
-                { key: "org", label: "Organisasjon", icon: "⚙️" },
+                { key: "centers", label: "Sentre", icon: "\ud83c\udfec" },
+                { key: "team", label: "Team", icon: "\ud83d\udc65" },
+                { key: "invitations", label: "Invitasjoner", icon: "\u2709\ufe0f" },
+                { key: "org", label: "Organisasjon", icon: "\u2699\ufe0f" },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)} style={{ padding: "0.7rem 1.2rem", border: "none", borderRadius: "12px", cursor: "pointer", background: tab === t.key ? "#121226" : "white", color: tab === t.key ? "white" : "#360817", fontWeight: tab === t.key ? 600 : 400, fontSize: "0.9rem", boxShadow: tab === t.key ? "none" : "0 2px 8px rgba(0,0,0,0.04)", transition: "all 0.2s" }}>{t.icon} {t.label}</button>
               ))}
@@ -202,7 +231,7 @@ export default function AdminPage() {
                   </div>
                 )}
                 {centers.length === 0 ? (
-                  <p style={{ color: "#360817", opacity: 0.5, textAlign: "center", padding: "2rem" }}>Ingen sentre ennå. Opprett ditt første senter!</p>
+                  <p style={{ color: "#360817", opacity: 0.5, textAlign: "center", padding: "2rem" }}>Ingen sentre enn\u00e5. Opprett ditt f\u00f8rste senter!</p>
                 ) : (
                   <div style={{ display: "grid", gap: "0.75rem" }}>
                     {centers.map(c => (
@@ -259,7 +288,7 @@ export default function AdminPage() {
                         <label style={{ display: "block", fontSize: "0.8rem", color: "#360817", marginBottom: "0.3rem" }}>Rolle</label>
                         <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ width: "100%", padding: "0.65rem 1rem", border: "2px solid #E7E1E3", borderRadius: "10px", fontSize: "0.9rem", boxSizing: "border-box" }}>
                           <option value="admin">Admin</option>
-                          <option value="redaktor">Redaktør</option>
+                          <option value="redaktor">Redakt\u00f8r</option>
                           <option value="leser">Leser</option>
                         </select>
                       </div>
@@ -279,7 +308,7 @@ export default function AdminPage() {
                           <span style={{ marginLeft: "0.75rem", fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: roleColors[inv.role], color: "#360817" }}>{roleLabels[inv.role]}</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span style={{ fontSize: "0.75rem", color: "#360817", opacity: 0.4 }}>Utløper {new Date(inv.expires_at).toLocaleDateString("nb-NO")}</span>
+                          <span style={{ fontSize: "0.75rem", color: "#360817", opacity: 0.4 }}>Utl\u00f8per {new Date(inv.expires_at).toLocaleDateString("nb-NO")}</span>
                           <button onClick={() => deleteInvitation(inv.id)} style={{ background: "none", border: "1px solid #E7E1E3", borderRadius: "8px", padding: "0.3rem 0.6rem", cursor: "pointer", fontSize: "0.75rem", color: "#991b1b" }}>Slett</button>
                         </div>
                       </div>
@@ -303,7 +332,7 @@ export default function AdminPage() {
                   </div>
                   <div style={{ padding: "1rem", background: "#FAE4FB", borderRadius: "12px", marginTop: "0.5rem" }}>
                     <p style={{ margin: 0, fontSize: "0.85rem", color: "#360817" }}>
-                      <strong>Plan:</strong> Gratis (Free tier) • <strong>Sentre:</strong> {centers.length} • <strong>Brukere:</strong> {teamMembers.length}
+                      <strong>Plan:</strong> Gratis (Free tier) \u2022 <strong>Sentre:</strong> {centers.length} \u2022 <strong>Brukere:</strong> {teamMembers.length}
                     </p>
                   </div>
                 </div>
@@ -314,4 +343,4 @@ export default function AdminPage() {
       </div>
     </div>
   )
-}
+              }
