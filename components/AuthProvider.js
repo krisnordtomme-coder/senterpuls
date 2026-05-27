@@ -1,8 +1,15 @@
 "use client"
-import { createContext, useContext, useEffect, useState, useRef } from "react"
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 
 const AuthContext = createContext({})
+
+function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Query timeout after " + ms + "ms")), ms))
+  ])
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -82,26 +89,30 @@ export function AuthProvider({ children }) {
   async function fetchMemberships(userId) {
     try {
       console.log("fetchMemberships called for:", userId)
-      const { data, error } = await supabase
-        .from("memberships")
-        .select(`
-          id,
-          role,
-          organization_id,
-          organizations (
+      const { data, error } = await withTimeout(
+        supabase
+          .from("memberships")
+          .select(`
             id,
-            name,
-            slug
-          )
-        `)
-        .eq("user_id", userId)
+            role,
+            organization_id,
+            organizations (
+              id,
+              name,
+              slug
+            )
+          `)
+          .eq("user_id", userId)
+      )
 
       if (error) {
         console.error("fetchMemberships error:", error.message)
-        const { data: simpleData, error: simpleError } = await supabase
-          .from("memberships")
-          .select("id, role, organization_id")
-          .eq("user_id", userId)
+        const { data: simpleData, error: simpleError } = await withTimeout(
+          supabase
+            .from("memberships")
+            .select("id, role, organization_id")
+            .eq("user_id", userId)
+        )
 
         if (simpleError) {
           console.error("fetchMemberships fallback error:", simpleError.message)
@@ -136,6 +147,12 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const refreshMemberships = useCallback(async () => {
+    if (user?.id) {
+      await fetchMemberships(user.id)
+    }
+  }, [user?.id])
+
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     return { data, error }
@@ -144,7 +161,7 @@ export function AuthProvider({ children }) {
   async function signUp(email, password, fullName) {
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { full_name: fullName } },
+      options: { data: { full_name: fullName } }
     })
     return { data, error }
   }
@@ -173,7 +190,7 @@ export function AuthProvider({ children }) {
   const value = {
     user, profile, memberships, currentOrg, setCurrentOrg,
     currentCenter, setCurrentCenter, loading, isOwner, isAdmin,
-    signIn, signUp, signInWithMagicLink, signOut,
+    signIn, signUp, signInWithMagicLink, signOut, refreshMemberships,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
