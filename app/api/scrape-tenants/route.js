@@ -125,6 +125,25 @@ function resolveUrl(href, baseUrl) {
   }
 }
 
+function getMainDomain(urlStr) {
+  try {
+    const hostname = new URL(urlStr).hostname.toLowerCase()
+    const parts = hostname.replace(/^www\\./, "").split(".")
+    if (parts.length >= 2) return parts.slice(-2).join(".")
+    return hostname
+  } catch {
+    return null
+  }
+}
+
+function isSameDomain(tenantUrl, sourceUrl) {
+  if (!tenantUrl || !sourceUrl) return false
+  const tenantDomain = getMainDomain(tenantUrl)
+  const sourceDomain = getMainDomain(sourceUrl)
+  if (!tenantDomain || !sourceDomain) return false
+  return tenantDomain === sourceDomain
+}
+
 function extractFromHtml(html, sourceUrl) {
   const tenants = []
   const seen = new Set()
@@ -352,7 +371,7 @@ export async function POST(req) {
     // Return tenants with name and url
     return NextResponse.json({
       success: true,
-      tenants: tenants.map(t => ({ name: t.name, url: t.url })),
+      tenants: tenants.map(t => ({ name: t.name, url: t.url && !isSameDomain(t.url, fetchUrl) ? t.url : null })),
       count: tenants.length
     })
 
