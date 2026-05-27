@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 
 export default function AdminPage() {
-  const { user, profile, memberships, currentOrg, setCurrentOrg, isAdmin, isOwner, signOut, loading } = useAuth()
+  const { user, profile, memberships, currentOrg, setCurrentOrg, isAdmin, isOwner, signOut, loading, refreshMemberships } = useAuth()
   const router = useRouter()
   const [tab, setTab] = useState("centers")
   const [centers, setCenters] = useState([])
@@ -70,23 +70,16 @@ export default function AdminPage() {
     setError(null)
     try {
       const slug = newOrgName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
-      const { data: orgData, error: orgErr } = await supabase.from("organizations").insert({ name: newOrgName.trim(), slug }).select().single()
-      let org = orgData
-      if (orgErr) {
-        console.warn("Insert with select failed:", orgErr.message)
-        await supabase.from("organizations").insert({ name: newOrgName.trim(), slug })
-        const { data: found } = await supabase.from("organizations").select("*").eq("slug", slug).single()
-        org = found
-      }
-      if (org) {
-        await supabase.from("memberships").insert({ user_id: user.id, organization_id: org.id, role: "eier" })
-        setCurrentOrg(org)
-        setShowNewOrg(false)
-        setNewOrgName("")
-        window.location.reload()
-      } else {
-        setError("Kunne ikke opprette organisasjon. Prøv igjen.")
-      }
+      const { data, error: rpcError } = await supabase.rpc("create_organization_with_owner", {
+        org_name: newOrgName.trim(),
+        org_slug: slug
+      })
+      if (rpcError) throw rpcError
+      console.log("Organization created:", data)
+      setCurrentOrg(data)
+      await refreshMemberships()
+      setShowNewOrg(false)
+      setNewOrgName("")
     } catch (err) {
       console.error("createOrganization:", err)
       setError("Noe gikk galt: " + err.message)
