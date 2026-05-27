@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         console.warn("Auth init error/timeout:", err.message)
-        // If getSession hung, try to recover from localStorage
+        // If getSession hung, try to recover session from localStorage
         if (err.message === "getSession_timeout") {
           try {
             const storageKey = Object.keys(localStorage).find(
@@ -48,18 +48,34 @@ export function AuthProvider({ children }) {
             )
             if (storageKey) {
               const stored = JSON.parse(localStorage.getItem(storageKey))
-              if (stored?.user) {
-                console.log("Recovered user from localStorage after timeout")
-                setUser(stored.user)
-                try {
-                  await initializeUser(stored.user.id)
-                } catch (initErr) {
-                  console.error("initializeUser after recovery failed:", initErr)
+              if (stored?.access_token && stored?.refresh_token) {
+                console.log("Recovering session from localStorage via setSession")
+                // Use setSession to properly authenticate the Supabase client
+                const { data: sessionData, error: sessionError } = await Promise.race([
+                  supabase.auth.setSession({
+                    access_token: stored.access_token,
+                    refresh_token: stored.refresh_token
+                  }),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("setSession_timeout")), 3000)
+                  )
+                ])
+                if (!sessionError && sessionData?.session?.user) {
+                  console.log("Session recovered successfully via setSession")
+                  setUser(sessionData.session.user)
+                  await initializeUser(sessionData.session.user.id)
+                } else if (stored?.user) {
+                  // Fallback: at least set the user for UI display
+                  console.warn("setSession failed, using user from localStorage for display")
+                  setUser(stored.user)
                 }
+              } else if (stored?.user) {
+                console.warn("No tokens in localStorage, using user for display only")
+                setUser(stored.user)
               }
             }
           } catch (recoveryErr) {
-            console.error("localStorage recovery failed:", recoveryErr)
+            console.error("Session recovery failed:", recoveryErr)
           }
         }
       } finally {
@@ -71,6 +87,7 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state change:", event)
         setUser(session?.user ?? null)
         if (session?.user) {
           try {
