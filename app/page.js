@@ -16,8 +16,9 @@ const SOURCE_LABELS = { website: "Nettside", instagram: "Instagram", facebook: "
 const SOURCE_ICONS = { instagram: "📷", facebook: "💬", website: "🌐" }
 
 export default function Home() {
-  const { user, profile, currentOrg, memberships, isOwner, isAdmin, signOut, loading: authLoading } = useAuth()
+  const { user, profile, currentOrg, setCurrentOrg, memberships, isOwner, isAdmin, signOut, loading: authLoading } = useAuth()
   const router = useRouter()
+
   const [suggestions, setSuggestions] = useState([])
   const [stores, setStores] = useState([])
   const [centers, setCenters] = useState([])
@@ -37,32 +38,39 @@ export default function Home() {
     }
   }, [authLoading, user, router])
 
+  // Load centers when org changes - use primitive ID for reliable comparison
   useEffect(() => {
-    if (currentOrg) {
-      loadCenters()
+    if (currentOrg?.id) {
+      const orgId = currentOrg.id
+      setSelectedCenter(null)
+      setCenters([])
+      setLoading(true)
+      loadCenters(orgId)
     }
-  }, [currentOrg])
+  }, [currentOrg?.id])
 
   useEffect(() => {
-    if (selectedCenter || currentOrg) {
-      loadData()
+    if (selectedCenter) {
+      loadData(selectedCenter.id, null)
+    } else if (currentOrg?.id) {
+      loadData(null, currentOrg.id)
     }
-  }, [selectedCenter, currentOrg])
+  }, [selectedCenter?.id, currentOrg?.id])
 
-  async function loadCenters() {
+  async function loadCenters(orgId) {
     const { data } = await supabase
       .from("centers")
       .select("*")
-      .eq("organization_id", currentOrg.id)
+      .eq("organization_id", orgId)
       .eq("active", true)
       .order("name")
     setCenters(data || [])
-    if (data && data.length > 0 && !selectedCenter) {
+    if (data && data.length > 0) {
       setSelectedCenter(data[0])
     }
   }
 
-  async function loadData() {
+  async function loadData(centerId, orgId) {
     let sugQuery = supabase
       .from("suggestions")
       .select("*, stores(name, category), content(original_text, source, original_url, image_urls, posted_at)")
@@ -70,16 +78,15 @@ export default function Home() {
 
     let storeQuery = supabase.from("stores").select("*").eq("active", true)
 
-    if (selectedCenter) {
-      storeQuery = storeQuery.eq("center_id", selectedCenter.id)
-    } else if (currentOrg) {
-      storeQuery = storeQuery.eq("organization_id", currentOrg.id)
+    if (centerId) {
+      storeQuery = storeQuery.eq("center_id", centerId)
+    } else if (orgId) {
+      storeQuery = storeQuery.eq("organization_id", orgId)
     }
 
     const [{ data: sug }, { data: st }] = await Promise.all([sugQuery, storeQuery])
-
     const storeIds = new Set((st || []).map(s => s.id))
-    const filteredSug = selectedCenter
+    const filteredSug = centerId
       ? (sug || []).filter(s => storeIds.has(s.store_id))
       : (sug || [])
 
@@ -101,7 +108,10 @@ export default function Home() {
       const data = await res.json()
       setScanResult(data)
       await fetch("/api/analyze", { method: "POST" })
-      setTimeout(loadData, 4000)
+      setTimeout(() => {
+        if (selectedCenter) loadData(selectedCenter.id, null)
+        else if (currentOrg?.id) loadData(null, currentOrg.id)
+      }, 4000)
     } catch (e) { setScanResult({ error: e.message }) }
     setScanning(false)
   }
@@ -112,14 +122,18 @@ export default function Home() {
       const res = await fetch("/api/scrape-social", { method: "POST" })
       const data = await res.json()
       setScanResult(data)
-      setTimeout(loadData, 4000)
+      setTimeout(() => {
+        if (selectedCenter) loadData(selectedCenter.id, null)
+        else if (currentOrg?.id) loadData(null, currentOrg.id)
+      }, 4000)
     } catch (e) { setScanResult({ error: e.message }) }
     setScanningSocial(false)
   }
 
   async function updateStatus(id, status) {
     await supabase.from("suggestions").update({
-      status, published_at: status === "published" ? new Date().toISOString() : null
+      status,
+      published_at: status === "published" ? new Date().toISOString() : null
     }).eq("id", id)
     setSuggestions(prev => prev.map(s => (s.id === id ? { ...s, status } : s)))
     setStats(prev => ({
@@ -163,32 +177,54 @@ export default function Home() {
       <header className="border-b px-6 py-5" style={{ background: "#FAE4FB", borderColor: "#E7E1E3" }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-2xl tracking-tight" style={{
-              fontFamily: "var(--font-heading, 'DM Serif Display'), Georgia, serif",
-              color: "#360817"
-            }}>
+            <h1 className="text-2xl tracking-tight" style={{ fontFamily: "var(--font-heading, 'DM Serif Display'), Georgia, serif", color: "#360817" }}>
               {"Senter"}<span style={{ color: "#9333ea" }}>{"Puls"}</span>
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
-              {centers.length > 1 ? (
+              {memberships.length > 1 && (
                 <select
-                  value={selectedCenter?.id || ""}
+                  value={currentOrg?.id || ""}
                   onChange={(e) => {
-                    const c = centers.find(c => c.id === e.target.value)
-                    setSelectedCenter(c)
-                    setLoading(true)
+                    const m = memberships.find(m => m.organization_id === e.target.value)
+                    if (m) setCurrentOrg(m.organizations)
                   }}
-                  className="text-sm bg-transparent border-none outline-none cursor-pointer"
-                  style={{ color: "#360817", opacity: 0.6 }}
+                  className="text-sm font-medium bg-transparent border-none outline-none cursor-pointer"
+                  style={{ color: "#360817", opacity: 0.8 }}
                 >
-                  {centers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                  {memberships.map(m => (
+                    <option key={m.organization_id} value={m.organization_id}>{m.organizations?.name}</option>
                   ))}
                 </select>
-              ) : (
-                <p className="text-sm" style={{ color: "#360817", opacity: 0.6 }}>
-                  {selectedCenter?.name || currentOrg?.name || "Laster..."}
-                </p>
+              )}
+              {memberships.length <= 1 && (
+                <span className="text-sm font-medium" style={{ color: "#360817", opacity: 0.8 }}>
+                  {currentOrg?.name || ""}
+                </span>
+              )}
+              {centers.length > 0 && (
+                <>
+                  <span style={{ color: "#360817", opacity: 0.3 }}>›</span>
+                  {centers.length > 1 ? (
+                    <select
+                      value={selectedCenter?.id || ""}
+                      onChange={(e) => {
+                        const c = centers.find(c => c.id === e.target.value)
+                        setSelectedCenter(c)
+                        setLoading(true)
+                      }}
+                      className="text-sm bg-transparent border-none outline-none cursor-pointer"
+                      style={{ color: "#360817", opacity: 0.6 }}
+                    >
+                      {centers.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-sm" style={{ color: "#360817", opacity: 0.6 }}>
+                      {selectedCenter?.name || centers[0]?.name}
+                    </span>
+                  )}
+                </>
               )}
               <span className="text-sm" style={{ color: "#360817", opacity: 0.4 }}>
                 · {stores.length} leietakere
@@ -197,50 +233,28 @@ export default function Home() {
           </div>
           <div className="flex gap-3 items-center">
             {(isOwner || isAdmin) && (
-              <button
-                onClick={() => router.push("/admin")}
+              <button onClick={() => router.push("/admin")}
                 className="px-4 py-2.5 text-sm font-medium transition-all duration-200"
-                style={{
-                  borderRadius: "6px",
-                  background: "white",
-                  color: "#360817",
-                  border: "1px solid #E7E1E3"
-                }}
-              >
+                style={{ borderRadius: "6px", background: "white", color: "#360817", border: "1px solid #E7E1E3" }}>
                 ⚙️ Admin
               </button>
             )}
             <button onClick={runSocialScan} disabled={scanningSocial}
               className="px-5 py-2.5 text-sm font-medium transition-all duration-200"
-              style={{
-                borderRadius: "6px",
-                background: scanningSocial ? "#D6C7FF" : "white",
-                color: "#360817",
-                border: "1px solid #E7E1E3",
-                cursor: scanningSocial ? "wait" : "pointer",
-                opacity: scanningSocial ? 0.7 : 1
-              }}>
+              style={{ borderRadius: "6px", background: scanningSocial ? "#D6C7FF" : "white", color: "#360817", border: "1px solid #E7E1E3", cursor: scanningSocial ? "wait" : "pointer", opacity: scanningSocial ? 0.7 : 1 }}>
               {scanningSocial ? "Scanner SoMe..." : "📱 SoMe-scan"}
             </button>
             <button onClick={runScan} disabled={scanning}
               className="px-5 py-2.5 text-sm font-medium transition-all duration-200"
-              style={{
-                borderRadius: "6px",
-                background: scanning ? "#5a1a2e" : "#360817",
-                color: "#FAE4FB",
-                cursor: scanning ? "wait" : "pointer"
-              }}>
+              style={{ borderRadius: "6px", background: scanning ? "#5a1a2e" : "#360817", color: "#FAE4FB", cursor: scanning ? "wait" : "pointer" }}>
               {scanning ? "Scanner..." : "Oppdater nå"}
             </button>
             <div className="ml-2 flex items-center gap-2">
               <span className="text-xs" style={{ color: "#360817", opacity: 0.4 }}>
                 {profile?.full_name || user.email}
               </span>
-              <button
-                onClick={signOut}
-                className="text-xs px-2 py-1"
-                style={{ color: "#360817", opacity: 0.4, cursor: "pointer" }}
-              >
+              <button onClick={signOut} className="text-xs px-2 py-1"
+                style={{ color: "#360817", opacity: 0.4, cursor: "pointer" }}>
                 Logg ut
               </button>
             </div>
@@ -269,14 +283,10 @@ export default function Home() {
             <div key={s.label} className="p-5 transition-all duration-200 hover:shadow-md"
               style={{ background: "white", borderRadius: "14px", border: "1px solid #E7E1E3" }}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium uppercase tracking-wider"
-                  style={{ color: "#360817", opacity: 0.5 }}>{s.label}</p>
+                <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "#360817", opacity: 0.5 }}>{s.label}</p>
                 <span className="text-lg">{s.icon}</span>
               </div>
-              <p className="text-3xl font-light" style={{
-                fontFamily: "var(--font-heading, 'DM Serif Display'), Georgia, serif",
-                color: "#360817"
-              }}>{s.value}</p>
+              <p className="text-3xl font-light" style={{ fontFamily: "var(--font-heading, 'DM Serif Display'), Georgia, serif", color: "#360817" }}>{s.value}</p>
             </div>
           ))}
         </div>
@@ -287,12 +297,7 @@ export default function Home() {
           {CATEGORIES.map(c => (
             <button key={c} onClick={() => setFilter(c)}
               className="px-4 py-2 text-xs font-medium transition-all duration-200"
-              style={{
-                borderRadius: "20px",
-                background: filter === c ? "#360817" : "white",
-                color: filter === c ? "#FAE4FB" : "#360817",
-                border: filter === c ? "1px solid #360817" : "1px solid #E7E1E3"
-              }}>
+              style={{ borderRadius: "20px", background: filter === c ? "#360817" : "white", color: filter === c ? "#FAE4FB" : "#360817", border: filter === c ? "1px solid #360817" : "1px solid #E7E1E3" }}>
               {c === "Alle" ? "Alle" : CAT_LABELS[c] || c}
             </button>
           ))}
@@ -302,12 +307,7 @@ export default function Home() {
           {SOURCES.map(s => (
             <button key={s} onClick={() => setSourceFilter(s)}
               className="px-4 py-2 text-xs font-medium transition-all duration-200"
-              style={{
-                borderRadius: "20px",
-                background: sourceFilter === s ? "#D6C7FF" : "white",
-                color: "#360817",
-                border: sourceFilter === s ? "1px solid #D6C7FF" : "1px solid #E7E1E3"
-              }}>
+              style={{ borderRadius: "20px", background: sourceFilter === s ? "#D6C7FF" : "white", color: "#360817", border: sourceFilter === s ? "1px solid #D6C7FF" : "1px solid #E7E1E3" }}>
               {s === "Alle" ? "Alle kilder" : `${SOURCE_ICONS[s] || ""} ${SOURCE_LABELS[s] || s}`}
             </button>
           ))}
@@ -315,20 +315,10 @@ export default function Home() {
             <span className="text-xs" style={{ color: "#360817", opacity: 0.4 }}>Sorter:</span>
             <button onClick={() => setSortBy("relevans")}
               className="px-3 py-1.5 text-xs font-medium transition-all duration-200"
-              style={{
-                borderRadius: "6px",
-                background: sortBy === "relevans" ? "#360817" : "white",
-                color: sortBy === "relevans" ? "#FAE4FB" : "#360817",
-                border: sortBy === "relevans" ? "none" : "1px solid #E7E1E3"
-              }}>Relevans</button>
+              style={{ borderRadius: "6px", background: sortBy === "relevans" ? "#360817" : "white", color: sortBy === "relevans" ? "#FAE4FB" : "#360817", border: sortBy === "relevans" ? "none" : "1px solid #E7E1E3" }}>Relevans</button>
             <button onClick={() => setSortBy("dato")}
               className="px-3 py-1.5 text-xs font-medium transition-all duration-200"
-              style={{
-                borderRadius: "6px",
-                background: sortBy === "dato" ? "#360817" : "white",
-                color: sortBy === "dato" ? "#FAE4FB" : "#360817",
-                border: sortBy === "dato" ? "none" : "1px solid #E7E1E3"
-              }}>Nyeste</button>
+              style={{ borderRadius: "6px", background: sortBy === "dato" ? "#360817" : "white", color: sortBy === "dato" ? "#FAE4FB" : "#360817", border: sortBy === "dato" ? "none" : "1px solid #E7E1E3" }}>Nyeste</button>
           </div>
         </div>
 
@@ -338,7 +328,7 @@ export default function Home() {
           <div className="text-center py-24">
             <p className="mb-2" style={{ color: "#360817", opacity: 0.4 }}>Ingen innholdsforslag ennå</p>
             <p className="text-sm" style={{ color: "#360817", opacity: 0.3 }}>
-              {"Klikk «Oppdater nå» for å starte scanning"}
+              {"Klikk \u00abOppdater n\u00e5\u00bb for \u00e5 starte scanning"}
             </p>
           </div>
         ) : (
@@ -349,4 +339,4 @@ export default function Home() {
       </main>
     </div>
   )
-}
+                     }
