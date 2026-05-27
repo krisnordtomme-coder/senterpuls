@@ -85,7 +85,7 @@ export default function AdminPage() {
         setNewOrgName("")
         window.location.reload()
       } else {
-        setError("Kunne ikke opprette organisasjon. Pr\u00f8v igjen.")
+        setError("Kunne ikke opprette organisasjon. Prøv igjen.")
       }
     } catch (err) {
       console.error("createOrganization:", err)
@@ -134,7 +134,7 @@ export default function AdminPage() {
   if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#FAE4FB" }}><p>Laster...</p></div>
   if (!user) return null
 
-  const roleLabels = { eier: "Eier", admin: "Admin", redaktor: "Redakt\u00f8r", leser: "Leser" }
+  const roleLabels = { eier: "Eier", admin: "Admin", redaktor: "Redaktør", leser: "Leser" }
   const roleColors = { eier: "#D4FF66", admin: "#D6C7FF", redaktor: "#FAE4FB", leser: "#E7E1E3" }
 
   return (
@@ -160,7 +160,7 @@ export default function AdminPage() {
         {memberships.length === 0 && !showNewOrg && (
           <div style={{ background: "white", borderRadius: "20px", padding: "3rem", textAlign: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.06)" }}>
             <h2 style={{ fontFamily: "var(--font-heading)", color: "#360817", fontSize: "1.6rem" }}>Velkommen til SenterPuls!</h2>
-            <p style={{ color: "#360817", opacity: 0.7, marginBottom: "1.5rem" }}>Opprett en organisasjon for \u00e5 komme i gang.</p>
+            <p style={{ color: "#360817", opacity: 0.7, marginBottom: "1.5rem" }}>Opprett en organisasjon for å komme i gang.</p>
             <button onClick={() => setShowNewOrg(true)} style={{ background: "#D4FF66", color: "#121226", border: "none", padding: "0.8rem 2rem", borderRadius: "12px", fontWeight: 600, cursor: "pointer", fontSize: "1rem" }}>+ Opprett organisasjon</button>
           </div>
         )}
@@ -181,10 +181,10 @@ export default function AdminPage() {
           <>
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
               {[
-                { key: "centers", label: "Sentre", icon: "\ud83c\udfec" },
-                { key: "team", label: "Team", icon: "\ud83d\udc65" },
-                { key: "invitations", label: "Invitasjoner", icon: "\u2709\ufe0f" },
-                { key: "org", label: "Organisasjon", icon: "\u2699\ufe0f" },
+                { key: "centers", label: "Sentre", icon: "🏬" },
+                { key: "team", label: "Team", icon: "👥" },
+                { key: "invitations", label: "Invitasjoner", icon: "✉️" },
+                { key: "org", label: "Organisasjon", icon: "⚙️" },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)} style={{ padding: "0.7rem 1.2rem", border: "none", borderRadius: "12px", cursor: "pointer", background: tab === t.key ? "#121226" : "white", color: tab === t.key ? "white" : "#360817", fontWeight: tab === t.key ? 600 : 400, fontSize: "0.9rem", boxShadow: tab === t.key ? "none" : "0 2px 8px rgba(0,0,0,0.04)", transition: "all 0.2s" }}>{t.icon} {t.label}</button>
               ))}
@@ -209,7 +209,7 @@ export default function AdminPage() {
                   </div>
                 )}
                 {centers.length === 0 ? (
-                  <p style={{ color: "#360817", opacity: 0.5, textAlign: "center", padding: "2rem" }}>Ingen sentre enn\u00e5. Opprett ditt f\u00f8rste senter!</p>
+                  <p style={{ color: "#360817", opacity: 0.5, textAlign: "center", padding: "2rem" }}>Ingen sentre ennå. Opprett ditt første senter!</p>
                 ) : (
                   <div style={{ display: "grid", gap: "0.75rem" }}>
                     {centers.map(c => (
@@ -266,7 +266,7 @@ export default function AdminPage() {
                         <label style={{ display: "block", fontSize: "0.8rem", color: "#360817", marginBottom: "0.3rem" }}>Rolle</label>
                         <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ width: "100%", padding: "0.65rem 1rem", border: "2px solid #E7E1E3", borderRadius: "10px", fontSize: "0.9rem", boxSizing: "border-box" }}>
                           <option value="admin">Admin</option>
-                          <option value="redaktor">Redakt\u00f8r</option>
+                          <option value="redaktor">Redaktør</option>
                           <option value="leser">Leser</option>
                         </select>
                       </div>
@@ -286,7 +286,7 @@ export default function AdminPage() {
                           <span style={{ marginLeft: "0.75rem", fontSize: "0.75rem", padding: "0.2rem 0.6rem", borderRadius: "6px", background: roleColors[inv.role], color: "#360817" }}>{roleLabels[inv.role]}</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span style={{ fontSize: "0.75rem", color: "#360817", opacity: 0.4 }}>Utl\u00f8per {new Date(inv.expires_at).toLocaleDateString("nb-NO")}</span>
+                          <span style={{ fontSize: "0.75rem", color: "#360817", opacity: 0.4 }}>Utløper {new Date(inv.expires_at).toLocaleDateString("nb-NO")}</span>
                           <button onClick={() => deleteInvitation(inv.id)} style={{ background: "none", border: "1px solid #E7E1E3", borderRadius: "8px", padding: "0.3rem 0.6rem", cursor: "pointer", fontSize: "0.75rem", color: "#991b1b" }}>Slett</button>
                         </div>
                       </div>
@@ -310,7 +310,7 @@ export default function AdminPage() {
                   </div>
                   <div style={{ padding: "1rem", background: "#FAE4FB", borderRadius: "12px", marginTop: "0.5rem" }}>
                     <p style={{ margin: 0, fontSize: "0.85rem", color: "#360817" }}>
-                      <strong>Plan:</strong> Gratis (Free tier) \u2022 <strong>Sentre:</strong> {centers.length} \u2022 <strong>Brukere:</strong> {teamMembers.length}
+                      <strong>Plan:</strong> Gratis (Free tier) • <strong>Sentre:</strong> {centers.length} • <strong>Brukere:</strong> {teamMembers.length}
                     </p>
                   </div>
                 </div>
