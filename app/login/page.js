@@ -80,7 +80,7 @@ export default function LoginPage() {
             marginTop: "0.5rem",
             fontSize: "0.9rem",
           }}>
-            {mode === "signup" ? "Opprett ny konto" : "Logg inn for \u00e5 fortsette"}
+            {mode === "signup" ? "Opprett ny konto" : "Logg inn for å fortsette"}
           </p>
         </div>
 
@@ -178,7 +178,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+                placeholder="••••••••"
                 required
                 minLength={6}
                 style={{
