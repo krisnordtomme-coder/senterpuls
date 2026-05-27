@@ -158,7 +158,7 @@ export default function Home() {
               )}
               {centers.length > 0 && (
                 <>
-                  <span style={{ color: "#360817", opacity: 0.3 }}>\u203a</span>
+                  <span style={{ color: "#360817", opacity: 0.3 }}>›</span>
                   {centers.length > 1 ? (
                     <select value={selectedCenter?.id || ""} onChange={(e) => { const c = centers.find(c => c.id === e.target.value); setSelectedCenter(c); setLoading(true) }}
                       className="text-sm bg-transparent border-none outline-none cursor-pointer" style={{ color: "#360817", opacity: 0.6 }}>
@@ -174,18 +174,18 @@ export default function Home() {
                       style={{ background: "none", border: "none", cursor: "pointer", opacity: 0.4, padding: "0 0.25rem", fontSize: "0.85rem" }}
                       onMouseOver={e => e.target.style.opacity = 0.8}
                       onMouseOut={e => e.target.style.opacity = 0.4}>
-                      \u2699\ufe0f
+                      ⚙️
                     </button>
                   )}
                 </>
               )}
-              <span className="text-sm" style={{ color: "#360817", opacity: 0.4 }}>\u00b7 {stores.length} leietakere</span>
+              <span className="text-sm" style={{ color: "#360817", opacity: 0.4 }}>· {stores.length} leietakere</span>
             </div>
           </div>
           <div className="flex gap-3 items-center">
             {(isOwner || isAdmin) && (
               <button onClick={() => router.push("/admin")} className="px-4 py-2.5 text-sm font-medium transition-all duration-200"
-                style={{ borderRadius: "6px", background: "white", color: "#360817", border: "1px solid #E7E1E3" }}>\u2699\ufe0f Admin</button>
+                style={{ borderRadius: "6px", background: "white", color: "#360817", border: "1px solid #E7E1E3" }}>⚙️ Admin</button>
             )}
             <button onClick={runSocialScan} disabled={scanningSocial} className="px-5 py-2.5 text-sm font-medium transition-all duration-200"
               style={{ borderRadius: "6px", background: scanningSocial ? "#D6C7FF" : "white", color: "#360817", border: "1px solid #E7E1E3", cursor: scanningSocial ? "wait" : "pointer", opacity: scanningSocial ? 0.7 : 1 }}>
