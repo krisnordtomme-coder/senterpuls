@@ -128,7 +128,9 @@ function resolveUrl(href, baseUrl) {
 function getMainDomain(urlStr) {
   try {
     const hostname = new URL(urlStr).hostname.toLowerCase()
-    const parts = hostname.replace(/^www\\./, "").split(".")
+    // Strip www. and get the main domain (e.g. "sandvika-storsenter.no")
+    const parts = hostname.replace(/^www\./, "").split(".")
+    // Return last two parts (domain.tld) or last three if short TLD like .co.uk
     if (parts.length >= 2) return parts.slice(-2).join(".")
     return hostname
   } catch {
@@ -148,6 +150,37 @@ function extractFromHtml(html, sourceUrl) {
   const tenants = []
   const seen = new Set()
   const baseUrl = sourceUrl
+
+  // Strategy 0: Next.js __NEXT_DATA__ (Placewise / SPA sites)
+  const nextDataMatch = html.match(/<script\s+id\s*=\s*["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)
+  if (nextDataMatch) {
+    try {
+      const nextData = JSON.parse(nextDataMatch[1])
+      // Walk through sectionsData looking for any object that has a "stores" array
+      const sectionsData = nextData?.props?.pageProps?.sectionsData
+      if (sectionsData && typeof sectionsData === 'object') {
+        for (const sectionKey of Object.keys(sectionsData)) {
+          const section = sectionsData[sectionKey]
+          if (section?.stores && Array.isArray(section.stores)) {
+            for (const store of section.stores) {
+              const name = normalizeText(store.name)
+              if (name && isLikelyStoreName(name) && !seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase())
+                // Prefer website_url, fall back to external_url, then construct from slug
+                let storeUrl = store.website_url || store.external_url || null
+                if (!storeUrl && store.url) {
+                  try {
+                    storeUrl = new URL(store.url, sourceUrl).href
+                  } catch (e) { /* skip */ }
+                }
+                tenants.push({ name, url: storeUrl, source: "next-data", confidence: 0.95 })
+              }
+            }
+          }
+        }
+      }
+    } catch (e) { /* invalid __NEXT_DATA__ JSON, skip */ }
+  }
 
   // Strategy 1: JSON-LD structured data (highest confidence)
   const jsonLdPattern = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
