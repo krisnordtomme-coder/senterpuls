@@ -87,9 +87,11 @@ export default function Home() {
   async function runScan() {
     setScanning(true); setScanResult(null)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ""
       const res = await fetch("/api/scrape", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ centerId: selectedCenter?.id || null })
       })
       const data = await res.json()
@@ -106,9 +108,11 @@ export default function Home() {
   async function runSocialScan() {
     setScanningSocial(true); setScanResult(null)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ""
       const res = await fetch("/api/scrape-social", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ centerId: selectedCenter?.id || null })
       })
       const data = await res.json()
@@ -266,4 +270,3 @@ export default function Home() {
     </div>
   )
 }
-
