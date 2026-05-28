@@ -51,6 +51,8 @@ export default function CenterSettingsPage() {
   const [scrapeError, setScrapeError] = useState("")
   const [selectedScrape, setSelectedScrape] = useState({})
 
+  const [editingTenantUrl, setEditingTenantUrl] = useState(null)
+
   const [showExcelModal, setShowExcelModal] = useState(false)
   const [excelText, setExcelText] = useState("")
   const [excelRows, setExcelRows] = useState([])
@@ -113,6 +115,13 @@ export default function CenterSettingsPage() {
   async function removeTenant(id) {
     await supabase.from("center_tenants").delete().eq("id", id)
     setTenants(prev => prev.filter(t => t.id !== id))
+  }
+
+  async function updateTenantUrl(id, url) {
+    const cleanUrl = url?.trim() || null
+    await supabase.from("center_tenants").update({ url: cleanUrl }).eq("id", id)
+    setTenants(prev => prev.map(t => t.id === id ? { ...t, url: cleanUrl } : t))
+    setEditingTenantUrl(null)
   }
 
   async function addCompetitor() {
@@ -338,13 +347,34 @@ export default function CenterSettingsPage() {
             ) : (
               <div style={{ display: "grid", gap: "0.5rem" }}>
                 {tenants.map(t => (
-                  <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.8rem 1.25rem", borderRadius: "12px", background: "#f8f7ff", border: "1px solid #E7E1E3" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
-                      <strong style={{ color: "#360817" }}>{t.name}</strong>
-                      {t.category && <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "6px", background: "#E7E1E3", color: "#360817" }}>{t.category}</span>}
-                      {t.url && <a href={t.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#7c3aed" }}>{"🔗"} Nettside</a>}
+                  <div key={t.id} style={{ padding: "0.8rem 1.25rem", borderRadius: "12px", background: "#f8f7ff", border: "1px solid #E7E1E3" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
+                        <strong style={{ color: "#360817" }}>{t.name}</strong>
+                        {t.category && <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "6px", background: "#E7E1E3", color: "#360817" }}>{t.category}</span>}
+                      </div>
+                      <button onClick={() => removeTenant(t.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.8rem", color: "#991b1b", padding: "0.2rem 0.5rem" }}>Fjern</button>
                     </div>
-                    <button onClick={() => removeTenant(t.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.8rem", color: "#991b1b", padding: "0.2rem 0.5rem" }}>Fjern</button>
+                    <div style={{ marginTop: "0.4rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      {editingTenantUrl?.id === t.id ? (
+                        <div style={{ display: "flex", gap: "0.4rem", flex: 1 }}>
+                          <input autoFocus value={editingTenantUrl.url} onChange={e => setEditingTenantUrl({ id: t.id, url: e.target.value })} onKeyDown={e => { if (e.key === "Enter") updateTenantUrl(t.id, editingTenantUrl.url); if (e.key === "Escape") setEditingTenantUrl(null) }} placeholder="https://www.butikken.no" style={{ flex: 1, padding: "0.35rem 0.6rem", border: "1px solid #7c3aed", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }} />
+                          <button onClick={() => updateTenantUrl(t.id, editingTenantUrl.url)} style={{ background: "#7c3aed", color: "white", border: "none", padding: "0.35rem 0.7rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Lagre</button>
+                          <button onClick={() => setEditingTenantUrl(null)} style={{ background: "none", border: "1px solid #E7E1E3", padding: "0.35rem 0.7rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", color: "#360817" }}>Avbryt</button>
+                        </div>
+                      ) : (
+                        <>
+                          {t.url ? (
+                            <>
+                              <a href={t.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#7c3aed", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}>{"🔗"} {t.url}</a>
+                              <button onClick={() => setEditingTenantUrl({ id: t.id, url: t.url })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.7rem", color: "#7c3aed", padding: "0.1rem 0.3rem" }} title="Endre URL">{"✏️"}</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setEditingTenantUrl({ id: t.id, url: "" })} style={{ background: "none", border: "1px dashed #ccc", borderRadius: "6px", padding: "0.25rem 0.6rem", cursor: "pointer", fontSize: "0.7rem", color: "#999" }}>+ Legg til URL</button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
