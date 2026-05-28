@@ -96,7 +96,11 @@ export default function Home() {
       })
       const data = await res.json()
       setScanResult(data)
-      await fetch("/api/analyze", { method: "POST" })
+      await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId: selectedCenter?.id || null })
+      })
       setTimeout(() => {
         if (selectedCenter) loadData(selectedCenter.id, null)
         else if (currentOrg?.id) loadData(null, currentOrg.id)
@@ -117,6 +121,11 @@ export default function Home() {
       })
       const data = await res.json()
       setScanResult(data)
+      await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId: selectedCenter?.id || null })
+      })
       setTimeout(() => {
         if (selectedCenter) loadData(selectedCenter.id, null)
         else if (currentOrg?.id) loadData(null, currentOrg.id)
