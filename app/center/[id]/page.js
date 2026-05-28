@@ -182,18 +182,33 @@ export default function CenterSettingsPage() {
     const toImport = scrapeResults.filter((_, i) => selectedScrape[i])
     if (toImport.length === 0) return
     setSaving(true)
-    const existing = new Set(tenants.map(t => t.name.toLowerCase()))
-    const newOnes = toImport.filter(t => !existing.has(t.name.toLowerCase()))
-    if (newOnes.length > 0) {
-      await supabase.from("center_tenants").insert(
-        newOnes.map(t => ({ center_id: centerId, name: t.name, category: null, url: t.url || null }))
-      )
+    try {
+      const existing = new Set(tenants.map(t => t.name.toLowerCase()))
+      const newOnes = toImport.filter(t => !existing.has(t.name.toLowerCase()))
+      if (newOnes.length > 0) {
+        // Insert in batches of 20 to avoid timeouts
+        for (let i = 0; i < newOnes.length; i += 20) {
+          const batch = newOnes.slice(i, i + 20)
+          const { error } = await supabase.from("center_tenants").insert(
+            batch.map(t => ({ center_id: centerId, name: t.name, category: null, url: t.url || null }))
+          )
+          if (error) {
+            console.error("Insert error:", error)
+            alert("Feil ved import: " + error.message)
+            setSaving(false)
+            return
+          }
+        }
+      }
+      const { data } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name")
+      setTenants(data || [])
+      setShowScrapeModal(false)
+      setScrapeResults([])
+      setScrapeUrl("")
+    } catch (err) {
+      console.error("Import error:", err)
+      alert("Uventet feil ved import: " + err.message)
     }
-    const { data } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name")
-    setTenants(data || [])
-    setShowScrapeModal(false)
-    setScrapeResults([])
-    setScrapeUrl("")
     setSaving(false)
   }
 
