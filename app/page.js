@@ -72,7 +72,7 @@ export default function Home() {
     setTenantCount(tenantResult?.count || (tenantResult?.data?.length) || 0)
 
     const storeIds = new Set((st || []).map(s => s.id))
-    const filteredSug = centerId ? (sug || []).filter(s => storeIds.has(s.store_id)) : (sug || [])
+    const filteredSug = (centerId || orgId) ? (sug || []).filter(s => storeIds.has(s.store_id)) : (sug || [])
     setSuggestions(filteredSug)
     setStores(st || [])
     setStats({
