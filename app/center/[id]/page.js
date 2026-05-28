@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/AuthProvider"
 import { supabase } from "@/lib/supabase"
 import { useRouter, useParams } from "next/navigation"
@@ -51,7 +51,8 @@ export default function CenterSettingsPage() {
   const [scrapeError, setScrapeError] = useState("")
   const [selectedScrape, setSelectedScrape] = useState({})
 
-  const [editingTenantUrl, setEditingTenantUrl] = useState(null)
+  const [editingTenantUrl, setEditingTenantUrl] = useState(null) // { id, url }
+  const hasLoadedData = useRef(false)
 
   const [showExcelModal, setShowExcelModal] = useState(false)
   const [excelText, setExcelText] = useState("")
@@ -61,14 +62,14 @@ export default function CenterSettingsPage() {
 
   useEffect(() => {
     if (!authLoading && !user) router.push("/login")
-  }, [user, authLoading])
+  }, [!user, authLoading])
 
   useEffect(() => {
-    if (centerId && user) loadAll()
-  }, [centerId, user])
+    if (centerId && user?.id) loadAll()
+  }, [centerId, user?.id])
 
   async function loadAll() {
-    setLoading(true)
+    if (!hasLoadedData.current) setLoading(true)
     const [centerRes, tenantsRes, competitorsRes] = await Promise.all([
       supabase.from("centers").select("*").eq("id", centerId).single(),
       supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name"),
@@ -83,6 +84,7 @@ export default function CenterSettingsPage() {
     setTenants(tenantsRes.data || [])
     setCompetitors(competitorsRes.data || [])
     setLoading(false)
+    hasLoadedData.current = true
   }
 
   async function saveProfile() {
@@ -358,7 +360,14 @@ export default function CenterSettingsPage() {
                     <div style={{ marginTop: "0.4rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                       {editingTenantUrl?.id === t.id ? (
                         <div style={{ display: "flex", gap: "0.4rem", flex: 1 }}>
-                          <input autoFocus value={editingTenantUrl.url} onChange={e => setEditingTenantUrl({ id: t.id, url: e.target.value })} onKeyDown={e => { if (e.key === "Enter") updateTenantUrl(t.id, editingTenantUrl.url); if (e.key === "Escape") setEditingTenantUrl(null) }} placeholder="https://www.butikken.no" style={{ flex: 1, padding: "0.35rem 0.6rem", border: "1px solid #7c3aed", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }} />
+                          <input
+                            autoFocus
+                            value={editingTenantUrl.url}
+                            onChange={e => setEditingTenantUrl({ id: t.id, url: e.target.value })}
+                            onKeyDown={e => { if (e.key === "Enter") updateTenantUrl(t.id, editingTenantUrl.url); if (e.key === "Escape") setEditingTenantUrl(null) }}
+                            placeholder="https://www.butikken.no"
+                            style={{ flex: 1, padding: "0.35rem 0.6rem", border: "1px solid #7c3aed", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }}
+                          />
                           <button onClick={() => updateTenantUrl(t.id, editingTenantUrl.url)} style={{ background: "#7c3aed", color: "white", border: "none", padding: "0.35rem 0.7rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Lagre</button>
                           <button onClick={() => setEditingTenantUrl(null)} style={{ background: "none", border: "1px solid #E7E1E3", padding: "0.35rem 0.7rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", color: "#360817" }}>Avbryt</button>
                         </div>
