@@ -21,6 +21,7 @@ export default function Home() {
 
   const [suggestions, setSuggestions] = useState([])
   const [stores, setStores] = useState([])
+  const [tenantCount, setTenantCount] = useState(0)
   const [centers, setCenters] = useState([])
   const [selectedCenter, setSelectedCenter] = useState(null)
   const [filter, setFilter] = useState("Alle")
@@ -65,7 +66,12 @@ export default function Home() {
     let storeQuery = supabase.from("stores").select("*").eq("active", true)
     if (centerId) { storeQuery = storeQuery.eq("center_id", centerId) }
     else if (orgId) { storeQuery = storeQuery.eq("organization_id", orgId) }
-    const [{ data: sug }, { data: st }] = await Promise.all([sugQuery, storeQuery])
+    let tenantQuery = null
+    if (centerId) {
+      tenantQuery = supabase.from("center_tenants").select("id", { count: "exact" }).eq("center_id", centerId)
+    }
+    const [{ data: sug }, { data: st }, tenantResult] = await Promise.all([sugQuery, storeQuery, tenantQuery ? tenantQuery : Promise.resolve({ count: 0 })])
+    setTenantCount(tenantResult?.count || (tenantResult?.data?.length) || 0)
     const storeIds = new Set((st || []).map(s => s.id))
     const filteredSug = centerId ? (sug || []).filter(s => storeIds.has(s.store_id)) : (sug || [])
     setSuggestions(filteredSug)
@@ -179,7 +185,7 @@ export default function Home() {
                   )}
                 </>
               )}
-              <span className="text-sm" style={{ color: "#360817", opacity: 0.4 }}>· {stores.length} leietakere</span>
+              <span className="text-sm" style={{ color: "#360817", opacity: 0.4 }}>· {tenantCount} leietakere</span>
             </div>
           </div>
           <div className="flex gap-3 items-center">
