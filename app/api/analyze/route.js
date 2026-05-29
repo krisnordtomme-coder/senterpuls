@@ -14,39 +14,39 @@ const MIN_RELEVANCE_SCORE = 50
 const MIN_RELEVANCE_SCORE_SOME = 20
 
 function buildSystemPrompt(centerName) {
-  return `Du er en innholdsanalytiker for kjÃ¸pesenteret ${centerName}.
+  return `Du er en innholdsanalytiker for kjøpesenteret ${centerName}.
 
 SENTERETS TONE: Ung og energisk. Varm og inkluderende, men med et moderne driv. Bruk emojis sparsomt (1-3 per post). Skriv kort og punchete.
 
-MÃLGRUPPE: Familier med barn, bredt aldersspenn.
+MÅLGRUPPE: Familier med barn, bredt aldersspenn.
 
 VIKTIG - KONTEKSTUALISERING:
-- Alt innhold du genererer skal handle om ${centerName}. ALDRI nevn andre kjÃ¸pesentre.
+- Alt innhold du genererer skal handle om ${centerName}. ALDRI nevn andre kjøpesentre.
 - Hvis kildematerialet nevner et annet senter eller en annen lokasjon, ERSTATT det med ${centerName}.
 - Hashtags skal bruke #${centerName.replace(/\s+/g, "")} (uten mellomrom).
 
 VIKTIG - FILTRERINGSKRITERIER:
-Du skal KUN gi hÃ¸y relevans-score (50+) til innhold som er:
-- Aktive kampanjer eller salg (f.eks. "50% pÃ¥ utvalgte varer", "medlemsdager")
+Du skal KUN gi høy relevans-score (50+) til innhold som er:
+- Aktive kampanjer eller salg (f.eks. "50% på utvalgte varer", "medlemsdager")
 - Nye produktlanseringer eller kolleksjoner
 - Konkrete events eller arrangementer med dato
 - Sesongbaserte tilbud med tidsavgrensning
-- BÃ¦rekraftsinitiativer eller konkrete nyheter
+- Bærekraftsinitiativer eller konkrete nyheter
 
 Du skal gi LAV relevans-score (under 30) til:
 - Generelle butikkbeskrivelser ("Vi er en butikk som selger...")
 - "Om oss"-tekst eller selskapsinformasjon
-- Statisk nettside-innhold uten nyhetsverdi (Ã¥pningstider, adresser, kontaktinfo)
+- Statisk nettside-innhold uten nyhetsverdi (åpningstider, adresser, kontaktinfo)
 - Produktkataloger uten spesifikke tilbud
 - Generelle slagord eller merkevare-beskrivelser
-- Innhold som bare beskriver hva butikken er eller gjÃ¸r generelt
+- Innhold som bare beskriver hva butikken er eller gjør generelt
 
 UNNTAK FOR SOSIALE MEDIER:
-For innhold fra Instagram eller Facebook, vÃ¦r mer sjenerÃ¸s med scoring. Selv profilbeskrivelser og korte poster kan vÃ¦re nyttige for Ã¥ vise at butikken er aktiv. Gi minst 30 til SoMe-innhold med noe substans.
+For innhold fra Instagram eller Facebook, vær mer sjønerøs med scoring. Selv profilbeskrivelser og korte poster kan være nyttige for å vise at butikken er aktiv. Gi minst 30 til SoMe-innhold med noe substans.
 
-Din oppgave er Ã¥ analysere innhold fra en butikk og returnere et JSON-objekt med:
+Din oppgave er å analysere innhold fra en butikk og returnere et JSON-objekt med:
 1. category: en av "kampanje", "produktlansering", "event", "sesong", "baerekraft", "nyhet"
-2. relevance_score: 1-100 (hÃ¸yere = mer relevant for senteret Ã¥ dele)
+2. relevance_score: 1-100 (høyere = mer relevant for senteret å dele)
 3. suggested_text: et objekt med ferdige tekster for ulike kanaler:
    - instagram: kort, engasjerende med 1-2 emojis og 3-5 hashtags (inkluder #${centerName.replace(/\s+/g, "")})
    - facebook: litt lengre, informativ, inkluder oppfordring
@@ -54,7 +54,7 @@ Din oppgave er Ã¥ analysere innhold fra en butikk og returnere et JSON-objekt 
 
 HUSK: Alt innhold skal kontekstualiseres for ${centerName}. Aldri referer til andre sentre.
 
-Vurder relevans basert pÃ¥: tidsnÃ¦rhet, engasjementspotensial, visuell appell, og om det driver trafikk til senteret.
+Vurder relevans basert på: tidsnærhet, engasjementspotensial, visuell appell, og om det driver trafikk til senteret.
 
 Svar KUN med gyldig JSON, ingen annen tekst.`
 }
@@ -95,35 +95,68 @@ export async function POST(request) {
       const body = await request.json()
       centerId = body?.centerId || null
     } catch {
-      // No body â analyze all unanalyzed content
+      // No body — analyze all unanalyzed content
     }
 
     const { data: existing } = await supabase.from("suggestions").select("content_id")
     const analyzedIds = new Set((existing || []).map((s) => s.content_id))
 
     // Fetch content with store AND center info
-    // When centerId is provided, filter at query level (before LIMIT) using inner join
-    let contentQuery
+    // When centerId is provided, first get store IDs for that center, then filter content
+    let allContent = null
+    let contentError = null
+
     if (centerId) {
-      contentQuery = supabase
+      // Step 1: Get store IDs belonging to this center
+      const { data: centerStores, error: storesErr } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("center_id", centerId)
+
+      if (storesErr) {
+        console.error("Failed to fetch center stores:", storesErr.message)
+        return Response.json({ error: "Failed to fetch stores: " + storesErr.message }, { status: 500 })
+      }
+
+      const storeIds = (centerStores || []).map((s) => s.id)
+      console.log("Center " + centerId + ": found " + storeIds.length + " stores")
+
+      if (storeIds.length === 0) {
+        return Response.json({ message: "Ingen butikker funnet for dette senteret", analyzed: 0 })
+      }
+
+      // Step 2: Fetch content for those stores
+      const { data, error } = await supabase
         .from("content")
-        .select("*, stores!inner(name, center_id)")
-        .eq("stores.center_id", centerId)
+        .select("*, stores(name, center_id)")
+        .in("store_id", storeIds)
         .order("scraped_at", { ascending: false })
         .limit(200)
+
+      allContent = data
+      contentError = error
     } else {
-      contentQuery = supabase
+      const { data, error } = await supabase
         .from("content")
         .select("*, stores(name, center_id)")
         .order("scraped_at", { ascending: false })
         .limit(200)
+
+      allContent = data
+      contentError = error
     }
 
-    const { data: allContent } = await contentQuery
+    if (contentError) {
+      console.error("Content query failed:", contentError.message)
+      return Response.json({ error: "Content query failed: " + contentError.message }, { status: 500 })
+    }
+
+    console.log("Fetched " + (allContent || []).length + " content items, " + analyzedIds.size + " already analyzed")
     let toAnalyze = (allContent || []).filter((c) => !analyzedIds.has(c.id))
+    console.log("To analyze after filtering: " + toAnalyze.length)
 
     if (!toAnalyze.length)
-      return Response.json({ message: "Ingen nytt innhold Ã¥ analysere", analyzed: 0 })
+      return Response.json({ message: "Ingen nytt innhold å analysere", analyzed: 0 })
 
     // Build a map of center_id -> center name for all relevant centers
     const centerIds = [...new Set(toAnalyze.map((c) => c.stores?.center_id).filter(Boolean))]
@@ -147,7 +180,7 @@ export async function POST(request) {
       const batch = toAnalyze.slice(i, i + BATCH_SIZE)
       const results = await Promise.all(
         batch.map(async (content) => {
-          const centerName = centerMap[content.stores?.center_id] || "KjÃ¸pesenteret"
+          const centerName = centerMap[content.stores?.center_id] || "Kjøpesenteret"
           const result = await analyzeContent(
             content.stores?.name || "Ukjent",
             content.original_text,
