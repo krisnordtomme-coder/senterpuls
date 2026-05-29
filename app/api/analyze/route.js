@@ -102,19 +102,25 @@ export async function POST(request) {
     const analyzedIds = new Set((existing || []).map((s) => s.content_id))
 
     // Fetch content with store AND center info
-    let contentQuery = supabase
-      .from("content")
-      .select("*, stores(name, center_id)")
-      .order("scraped_at", { ascending: false })
-      .limit(200)
+    // When centerId is provided, filter at query level (before LIMIT) using inner join
+    let contentQuery
+    if (centerId) {
+      contentQuery = supabase
+        .from("content")
+        .select("*, stores!inner(name, center_id)")
+        .eq("stores.center_id", centerId)
+        .order("scraped_at", { ascending: false })
+        .limit(200)
+    } else {
+      contentQuery = supabase
+        .from("content")
+        .select("*, stores(name, center_id)")
+        .order("scraped_at", { ascending: false })
+        .limit(200)
+    }
 
     const { data: allContent } = await contentQuery
     let toAnalyze = (allContent || []).filter((c) => !analyzedIds.has(c.id))
-
-    // If centerId specified, only analyze content from that center's stores
-    if (centerId) {
-      toAnalyze = toAnalyze.filter((c) => c.stores?.center_id === centerId)
-    }
 
     if (!toAnalyze.length)
       return Response.json({ message: "Ingen nytt innhold Ã¥ analysere", analyzed: 0 })
