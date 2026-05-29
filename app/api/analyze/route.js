@@ -13,12 +13,36 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MIN_RELEVANCE_SCORE = 50
 const MIN_RELEVANCE_SCORE_SOME = 20
 
-function buildSystemPrompt(centerName) {
+// Maps the tone_of_voice slug (set on the center settings page) to a tone
+// instruction for the model. Keep keys in sync with TONE_OPTIONS in
+// app/center/[id]/page.js.
+const TONE_PROFILES = {
+  "varm-og-inviterende": "varm, vennlig og inkluderende – imøtekommende og familievennlig",
+  "moderne-og-trendy": "moderne, ung og trendy – friskt, ungdommelig og i tiden",
+  "lokal-og-naer": "lokal og nær – jordnær, nedpå og lokalt forankret",
+  "eksklusiv-og-premium": "eksklusiv og premium – sofistikert, elegant og kvalitetsbevisst",
+  "praktisk-og-effektiv": "praktisk og effektiv – rett på sak, tydelig og funksjonell",
+  "baerekraftig-og-bevisst": "bærekraftig og bevisst – miljøbevisst, ansvarlig og verdidrevet",
+}
+
+// Fallbacks preserve the previous hardcoded behavior for centers that have not
+// configured a tone / customer group.
+const DEFAULT_TONE = "ung og energisk – varm og inkluderende, men med et moderne driv"
+const DEFAULT_AUDIENCE = "Familier med barn, bredt aldersspenn"
+
+function buildSystemPrompt(center) {
+  const centerName = center?.name || "Kjøpesenteret"
+  const tone = (center?.tone_of_voice && TONE_PROFILES[center.tone_of_voice]) || DEFAULT_TONE
+  const audience = center?.customer_group?.trim() || DEFAULT_AUDIENCE
+  const positioningLine = center?.positioning?.trim()
+    ? `\n\nSENTERETS POSISJONERING: ${center.positioning.trim()}`
+    : ""
+
   return `Du er en innholdsanalytiker for kjøpesenteret ${centerName}.
 
-SENTERETS TONE: Ung og energisk. Varm og inkluderende, men med et moderne driv. Bruk emojis sparsomt (1-3 per post). Skriv kort og punchete.
+SENTERETS TONE: ${tone}. Bruk emojis sparsomt (1-3 per post). Skriv kort og punchete.
 
-MÅLGRUPPE: Familier med barn, bredt aldersspenn.
+MÅLGRUPPE: ${audience}.${positioningLine}
 
 VIKTIG - KONTEKSTUALISERING:
 - Alt innhold du genererer skal handle om ${centerName}. ALDRI nevn andre kjøpesentre.
@@ -68,8 +92,9 @@ Vurder relevans basert på: tidsnærhet, engasjementspotensial, visuell appell, 
 Svar KUN med gyldig JSON, ingen annen tekst.`
 }
 
-async function analyzeContent(storeName, text, source, centerName) {
+async function analyzeContent(storeName, text, source, center) {
   try {
+    const centerName = center?.name || "Kjøpesenteret"
     const sourceNote =
       source === "instagram" || source === "facebook"
         ? "\n(Kilde: " + source + " - vurder som SoMe-innhold)"
@@ -78,7 +103,7 @@ async function analyzeContent(storeName, text, source, centerName) {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      system: buildSystemPrompt(centerName),
+      system: buildSystemPrompt(center),
       messages: [
         {
           role: "user",
@@ -174,10 +199,10 @@ export async function POST(request) {
     if (centerIds.length > 0) {
       const { data: centers } = await supabase
         .from("centers")
-        .select("id, name")
+        .select("id, name, tone_of_voice, positioning, customer_group")
         .in("id", centerIds)
       for (const c of centers || []) {
-        centerMap[c.id] = c.name
+        centerMap[c.id] = c
       }
     }
 
@@ -189,12 +214,12 @@ export async function POST(request) {
       const batch = toAnalyze.slice(i, i + BATCH_SIZE)
       const results = await Promise.all(
         batch.map(async (content) => {
-          const centerName = centerMap[content.stores?.center_id] || "Kjøpesenteret"
+          const center = centerMap[content.stores?.center_id] || { name: "Kjøpesenteret" }
           const result = await analyzeContent(
             content.stores?.name || "Ukjent",
             content.original_text,
             content.source,
-            centerName
+            center
           )
           return { content, result }
         })
