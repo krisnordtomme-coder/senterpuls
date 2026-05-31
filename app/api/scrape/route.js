@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import * as cheerio from "cheerio"
 import { createHash } from "crypto"
 import { cookies } from "next/headers"
+import { syncTenantsToStores } from "../../../lib/syncTenants"
 
 function getSupabase(authToken) {
   return createClient(
@@ -129,60 +130,6 @@ async function scrapeStore(store) {
     seen.add(key)
     return true
   }).slice(0, 5)
-}
-
-// Normalize URLs: ensure they start with https://
-function normalizeUrl(url) {
-  if (!url) return null
-  url = url.trim()
-  if (url.startsWith("http://") || url.startsWith("https://")) return url
-  if (url.startsWith("www.")) return "https://" + url
-  return "https://" + url
-}
-
-// Sync center_tenants (with URLs) into the stores table so content pipeline works
-async function syncTenantsToStores(centerId, supabase) {
-  // Get center info to find organization_id
-  const { data: center, error: centerErr } = await supabase.from("centers").select("id, organization_id").eq("id", centerId).single()
-  if (!center) return []
-
-  // Get center_tenants that have URLs
-  const { data: tenants, error: tenantErr } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).not("url", "is", null)
-  if (!tenants || tenants.length === 0) return []
-
-  // Get existing stores for this center (stores table may have looser RLS)
-  const { data: existingStores } = await supabase.from("stores").select("id, name, url, center_id").eq("center_id", centerId)
-  const existingByName = new Map((existingStores || []).map(s => [s.name.toLowerCase(), s]))
-
-  const syncedStores = []
-
-  for (const tenant of tenants) {
-    if (!tenant.url) continue
-    const normalizedUrl = normalizeUrl(tenant.url)
-    const key = tenant.name.toLowerCase()
-    const existing = existingByName.get(key)
-
-    if (existing) {
-      // Store already exists — update URL if needed
-      if (existing.url !== normalizedUrl) {
-        await supabase.from("stores").update({ url: normalizedUrl, active: true }).eq("id", existing.id)
-      }
-      syncedStores.push({ ...existing, url: normalizedUrl, active: true })
-    } else {
-      // Create new store entry from center_tenant
-      const { data: newStore, error } = await supabase.from("stores").insert({
-        name: tenant.name,
-        url: normalizedUrl,
-        category: tenant.category || null,
-        center_id: centerId,
-        organization_id: center.organization_id,
-        active: true,
-      }).select().single()
-      if (newStore) syncedStores.push(newStore)
-    }
-  }
-
-  return syncedStores
 }
 
 export async function POST(request) {

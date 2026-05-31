@@ -19,6 +19,26 @@ const TENANT_CATEGORIES = [
   "Bank og finans", "Frisør og skjønnhet", "Optiker", "Apotek", "Annet"
 ]
 
+// Users may paste "@navn", a bare username, or a full profile URL. Store the
+// bare username/page slug, which is what /api/scrape-social expects.
+function normalizeIgHandle(v) {
+  if (!v) return null
+  let s = v.trim()
+  const m = s.match(/instagram\.com\/([^/?#]+)/i)
+  if (m) s = m[1]
+  s = s.replace(/^@/, "").replace(/\/+$/, "").trim()
+  return s || null
+}
+
+function normalizeFbPage(v) {
+  if (!v) return null
+  let s = v.trim()
+  const m = s.match(/facebook\.com\/([^/?#]+)/i)
+  if (m) s = m[1]
+  s = s.replace(/^@/, "").replace(/\/+$/, "").trim()
+  return s || null
+}
+
 export default function CenterSettingsPage() {
   const { user, memberships, isAdmin, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -39,6 +59,8 @@ export default function CenterSettingsPage() {
   const [newTenantName, setNewTenantName] = useState("")
   const [newTenantCategory, setNewTenantCategory] = useState("")
   const [newTenantUrl, setNewTenantUrl] = useState("")
+  const [newTenantInstagram, setNewTenantInstagram] = useState("")
+  const [newTenantFacebook, setNewTenantFacebook] = useState("")
 
   const [newCompName, setNewCompName] = useState("")
   const [newCompDesc, setNewCompDesc] = useState("")
@@ -51,7 +73,7 @@ export default function CenterSettingsPage() {
   const [scrapeError, setScrapeError] = useState("")
   const [selectedScrape, setSelectedScrape] = useState({})
 
-  const [editingTenantUrl, setEditingTenantUrl] = useState(null) // { id, url }
+  const [editingTenant, setEditingTenant] = useState(null) // { id, url, instagram_handle, facebook_page }
   const hasLoadedData = useRef(false)
 
   const [showExcelModal, setShowExcelModal] = useState(false)
@@ -104,11 +126,15 @@ export default function CenterSettingsPage() {
       center_id: centerId,
       name: newTenantName.trim(),
       category: newTenantCategory || null,
-      url: newTenantUrl.trim() || null
+      url: newTenantUrl.trim() || null,
+      instagram_handle: normalizeIgHandle(newTenantInstagram),
+      facebook_page: normalizeFbPage(newTenantFacebook)
     })
     setNewTenantName("")
     setNewTenantCategory("")
     setNewTenantUrl("")
+    setNewTenantInstagram("")
+    setNewTenantFacebook("")
     const { data } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name")
     setTenants(data || [])
     setSaving(false)
@@ -119,11 +145,15 @@ export default function CenterSettingsPage() {
     setTenants(prev => prev.filter(t => t.id !== id))
   }
 
-  async function updateTenantUrl(id, url) {
-    const cleanUrl = url?.trim() || null
-    await supabase.from("center_tenants").update({ url: cleanUrl }).eq("id", id)
-    setTenants(prev => prev.map(t => t.id === id ? { ...t, url: cleanUrl } : t))
-    setEditingTenantUrl(null)
+  async function updateTenant(id, fields) {
+    const patch = {
+      url: fields.url?.trim() || null,
+      instagram_handle: normalizeIgHandle(fields.instagram_handle),
+      facebook_page: normalizeFbPage(fields.facebook_page)
+    }
+    await supabase.from("center_tenants").update(patch).eq("id", id)
+    setTenants(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
+    setEditingTenant(null)
   }
 
   async function addCompetitor() {
@@ -222,7 +252,9 @@ export default function CenterSettingsPage() {
       const name = (cols[0] || "").trim()
       const category = (cols[1] || "").trim()
       const url = (cols[2] || "").trim()
-      if (name) rows.push({ name, category, url })
+      const instagram = (cols[3] || "").trim()
+      const facebook = (cols[4] || "").trim()
+      if (name) rows.push({ name, category, url, instagram, facebook })
     }
     setExcelRows(rows)
     const sel = {}
@@ -242,7 +274,9 @@ export default function CenterSettingsPage() {
           center_id: centerId,
           name: t.name,
           category: TENANT_CATEGORIES.includes(t.category) ? t.category : null,
-          url: t.url || null
+          url: t.url || null,
+          instagram_handle: normalizeIgHandle(t.instagram),
+          facebook_page: normalizeFbPage(t.facebook)
         }))
       )
     }
@@ -352,6 +386,16 @@ export default function CenterSettingsPage() {
                   <input value={newTenantUrl} onChange={e => setNewTenantUrl(e.target.value)} placeholder="https://..."
                     style={{ width: "100%", padding: "0.65rem 1rem", border: "2px solid #E7E1E3", borderRadius: "10px", fontSize: "0.9rem", boxSizing: "border-box" }} />
                 </div>
+                <div style={{ flex: 1, minWidth: "140px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#360817", marginBottom: "0.3rem" }}>Instagram</label>
+                  <input value={newTenantInstagram} onChange={e => setNewTenantInstagram(e.target.value)} placeholder="@brukernavn"
+                    style={{ width: "100%", padding: "0.65rem 1rem", border: "2px solid #E7E1E3", borderRadius: "10px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1, minWidth: "140px" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#360817", marginBottom: "0.3rem" }}>Facebook</label>
+                  <input value={newTenantFacebook} onChange={e => setNewTenantFacebook(e.target.value)} placeholder="sidenavn"
+                    style={{ width: "100%", padding: "0.65rem 1rem", border: "2px solid #E7E1E3", borderRadius: "10px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+                </div>
                 <button onClick={addTenant} disabled={saving || !newTenantName.trim()} style={{
                   background: "#121226", color: "white", border: "none", padding: "0.65rem 1.2rem",
                   borderRadius: "10px", fontWeight: 600, cursor: "pointer", opacity: !newTenantName.trim() ? 0.4 : 1
@@ -372,31 +416,43 @@ export default function CenterSettingsPage() {
                       </div>
                       <button onClick={() => removeTenant(t.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.8rem", color: "#991b1b", padding: "0.2rem 0.5rem" }}>Fjern</button>
                     </div>
-                    <div style={{ marginTop: "0.4rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      {editingTenantUrl?.id === t.id ? (
-                        <div style={{ display: "flex", gap: "0.4rem", flex: 1 }}>
+                    <div style={{ marginTop: "0.4rem" }}>
+                      {editingTenant?.id === t.id ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                           <input
                             autoFocus
-                            value={editingTenantUrl.url}
-                            onChange={e => setEditingTenantUrl({ id: t.id, url: e.target.value })}
-                            onKeyDown={e => { if (e.key === "Enter") updateTenantUrl(t.id, editingTenantUrl.url); if (e.key === "Escape") setEditingTenantUrl(null) }}
-                            placeholder="https://www.butikken.no"
-                            style={{ flex: 1, padding: "0.35rem 0.6rem", border: "1px solid #7c3aed", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }}
+                            value={editingTenant.url}
+                            onChange={e => setEditingTenant({ ...editingTenant, url: e.target.value })}
+                            placeholder="🔗 https://www.butikken.no"
+                            style={{ padding: "0.35rem 0.6rem", border: "1px solid #7c3aed", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }}
                           />
-                          <button onClick={() => updateTenantUrl(t.id, editingTenantUrl.url)} style={{ background: "#7c3aed", color: "white", border: "none", padding: "0.35rem 0.7rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Lagre</button>
-                          <button onClick={() => setEditingTenantUrl(null)} style={{ background: "none", border: "1px solid #E7E1E3", padding: "0.35rem 0.7rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", color: "#360817" }}>Avbryt</button>
+                          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                            <input
+                              value={editingTenant.instagram_handle}
+                              onChange={e => setEditingTenant({ ...editingTenant, instagram_handle: e.target.value })}
+                              placeholder="📷 Instagram @brukernavn"
+                              style={{ flex: 1, minWidth: "160px", padding: "0.35rem 0.6rem", border: "1px solid #E7E1E3", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }}
+                            />
+                            <input
+                              value={editingTenant.facebook_page}
+                              onChange={e => setEditingTenant({ ...editingTenant, facebook_page: e.target.value })}
+                              placeholder="💬 Facebook sidenavn"
+                              style={{ flex: 1, minWidth: "160px", padding: "0.35rem 0.6rem", border: "1px solid #E7E1E3", borderRadius: "6px", fontSize: "0.8rem", outline: "none" }}
+                            />
+                          </div>
+                          <div style={{ display: "flex", gap: "0.4rem" }}>
+                            <button onClick={() => updateTenant(t.id, editingTenant)} style={{ background: "#7c3aed", color: "white", border: "none", padding: "0.35rem 0.9rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Lagre</button>
+                            <button onClick={() => setEditingTenant(null)} style={{ background: "none", border: "1px solid #E7E1E3", padding: "0.35rem 0.9rem", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer", color: "#360817" }}>Avbryt</button>
+                          </div>
                         </div>
                       ) : (
-                        <>
-                          {t.url ? (
-                            <>
-                              <a href={t.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#7c3aed", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}>{"🔗"} {t.url}</a>
-                              <button onClick={() => setEditingTenantUrl({ id: t.id, url: t.url })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.7rem", color: "#7c3aed", padding: "0.1rem 0.3rem" }} title="Endre URL">{"✏️"}</button>
-                            </>
-                          ) : (
-                            <button onClick={() => setEditingTenantUrl({ id: t.id, url: "" })} style={{ background: "none", border: "1px dashed #ccc", borderRadius: "6px", padding: "0.25rem 0.6rem", cursor: "pointer", fontSize: "0.7rem", color: "#999" }}>+ Legg til URL</button>
-                          )}
-                        </>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                          {t.url && <a href={t.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.75rem", color: "#7c3aed", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "260px" }}>{"🔗"} {t.url}</a>}
+                          {t.instagram_handle && <span style={{ fontSize: "0.75rem", color: "#360817" }}>{"📷"} {t.instagram_handle}</span>}
+                          {t.facebook_page && <span style={{ fontSize: "0.75rem", color: "#360817" }}>{"💬"} {t.facebook_page}</span>}
+                          {!t.url && !t.instagram_handle && !t.facebook_page && <span style={{ fontSize: "0.7rem", color: "#999" }}>Ingen lenker</span>}
+                          <button onClick={() => setEditingTenant({ id: t.id, url: t.url || "", instagram_handle: t.instagram_handle || "", facebook_page: t.facebook_page || "" })} style={{ background: "none", border: "1px dashed #ccc", borderRadius: "6px", padding: "0.2rem 0.6rem", cursor: "pointer", fontSize: "0.7rem", color: "#7c3aed" }}>{"✏️"} Rediger lenker</button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -561,14 +617,14 @@ export default function CenterSettingsPage() {
               <button onClick={() => setShowExcelModal(false)} style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#360817" }}>{"✕"}</button>
             </div>
             <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "10px", padding: "0.75rem 1rem", marginBottom: "1rem", fontSize: "0.8rem", color: "#166534" }}>
-              Kopier kolonner fra Excel og lim inn nedenfor. Forventet format: <strong>Navn</strong> (kol. 1), <strong>Kategori</strong> (kol. 2, valgfri), <strong>URL</strong> (kol. 3, valgfri).
+              Kopier kolonner fra Excel og lim inn nedenfor. Forventet format: <strong>Navn</strong> (kol. 1), <strong>Kategori</strong> (kol. 2, valgfri), <strong>URL</strong> (kol. 3, valgfri), <strong>Instagram</strong> (kol. 4, valgfri), <strong>Facebook</strong> (kol. 5, valgfri).
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", fontSize: "0.85rem", color: "#360817", cursor: "pointer" }}>
               <input type="checkbox" checked={excelHasHeader} onChange={e => { setExcelHasHeader(e.target.checked); parseExcelText(excelText) }} />
               Første rad er overskrift (hopp over)
             </label>
             <textarea value={excelText} onChange={e => { setExcelText(e.target.value); parseExcelText(e.target.value) }}
-              placeholder="Butikknavn&#9;Kategori&#9;URL&#10;Kiwi&#9;Dagligvare&#9;https://kiwi.no&#10;H&M&#9;Klær og mote&#9;"
+              placeholder="Butikknavn&#9;Kategori&#9;URL&#9;Instagram&#9;Facebook&#10;Kiwi&#9;Dagligvare&#9;https://kiwi.no&#9;@kiwinorge&#9;kiwinorge"
               rows={6} style={{ width: "100%", padding: "0.75rem 1rem", border: "2px solid #E7E1E3", borderRadius: "12px", fontSize: "0.85rem", fontFamily: "monospace", resize: "vertical", boxSizing: "border-box", marginBottom: "1rem" }} />
             {excelRows.length > 0 && (
               <>
@@ -589,6 +645,8 @@ export default function CenterSettingsPage() {
                         <strong>{r.name}</strong>
                         {r.category && <span style={{ marginLeft: "0.5rem", fontSize: "0.75rem", color: "#059669" }}>{r.category}</span>}
                         {r.url && <span style={{ marginLeft: "0.5rem", fontSize: "0.7rem", color: "#7c3aed" }}>{r.url}</span>}
+                        {r.instagram && <span style={{ marginLeft: "0.5rem", fontSize: "0.7rem", color: "#360817" }}>{"📷"} {r.instagram}</span>}
+                        {r.facebook && <span style={{ marginLeft: "0.5rem", fontSize: "0.7rem", color: "#360817" }}>{"💬"} {r.facebook}</span>}
                       </span>
                     </label>
                   ))}

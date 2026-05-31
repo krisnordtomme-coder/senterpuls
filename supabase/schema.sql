@@ -117,11 +117,15 @@ CREATE TABLE IF NOT EXISTS center_tenants (
   name TEXT NOT NULL,
   category TEXT,
   url TEXT,
+  instagram_handle TEXT,
+  facebook_page TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE center_tenants ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE center_tenants ADD COLUMN IF NOT EXISTS url TEXT;
+ALTER TABLE center_tenants ADD COLUMN IF NOT EXISTS instagram_handle TEXT;
+ALTER TABLE center_tenants ADD COLUMN IF NOT EXISTS facebook_page TEXT;
 ALTER TABLE center_tenants ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE center_tenants ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
@@ -145,9 +149,10 @@ CREATE TABLE IF NOT EXISTS stores (
   organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
   center_id UUID REFERENCES centers(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  url TEXT NOT NULL,
+  url TEXT,  -- nullable: social-only tenants (Instagram/Facebook, no website) still get a store row
   category TEXT,
   instagram_handle TEXT,
+  facebook_page TEXT,
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -156,8 +161,11 @@ ALTER TABLE stores ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES orga
 ALTER TABLE stores ADD COLUMN IF NOT EXISTS center_id UUID REFERENCES centers(id) ON DELETE CASCADE;
 ALTER TABLE stores ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE stores ADD COLUMN IF NOT EXISTS instagram_handle TEXT;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS facebook_page TEXT;
 ALTER TABLE stores ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true;
 ALTER TABLE stores ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+-- Drop the legacy NOT NULL on url so social-only tenants can be stored.
+ALTER TABLE stores ALTER COLUMN url DROP NOT NULL;
 
 -- Raw scraped items. content_hash (md5 of original_text) dedupes inserts.
 -- source is one of 'website' | 'instagram' | 'facebook'.
