@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/AuthProvider"
-import { supabase, supabaseDirectUpdate } from "@/lib/supabase"
+import { supabase, supabaseDirectUpdate, supabaseDirectInsert, supabaseDirectDelete } from "@/lib/supabase"
 import { useRouter, useParams } from "next/navigation"
 
 const TONE_OPTIONS = [
@@ -111,18 +111,22 @@ export default function CenterSettingsPage() {
 
   async function saveProfile() {
     setSaving(true)
-    await supabase.from("centers").update({
+    const { error } = await supabaseDirectUpdate("centers", { id: centerId }, {
       customer_group: customerGroup || null,
       positioning: positioning || null,
       tone_of_voice: toneOfVoice || null
-    }).eq("id", centerId)
+    })
+    if (error) {
+      console.error("saveProfile error:", error)
+      alert("Kunne ikke lagre senterprofil: " + error.message)
+    }
     setSaving(false)
   }
 
   async function addTenant() {
     if (!newTenantName.trim()) return
     setSaving(true)
-    await supabase.from("center_tenants").insert({
+    const { data, error } = await supabaseDirectInsert("center_tenants", {
       center_id: centerId,
       name: newTenantName.trim(),
       category: newTenantCategory || null,
@@ -130,18 +134,30 @@ export default function CenterSettingsPage() {
       instagram_handle: normalizeIgHandle(newTenantInstagram),
       facebook_page: normalizeFbPage(newTenantFacebook)
     })
+    if (error) {
+      console.error("addTenant error:", error)
+      alert("Kunne ikke legge til leietaker: " + error.message)
+      setSaving(false)
+      return
+    }
     setNewTenantName("")
     setNewTenantCategory("")
     setNewTenantUrl("")
     setNewTenantInstagram("")
     setNewTenantFacebook("")
-    const { data } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name")
-    setTenants(data || [])
+    if (data && data[0]) {
+      setTenants(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name, "nb")))
+    }
     setSaving(false)
   }
 
   async function removeTenant(id) {
-    await supabase.from("center_tenants").delete().eq("id", id)
+    const { error } = await supabaseDirectDelete("center_tenants", { id })
+    if (error) {
+      console.error("removeTenant error:", error)
+      alert("Kunne ikke fjerne leietaker: " + error.message)
+      return
+    }
     setTenants(prev => prev.filter(t => t.id !== id))
   }
 
@@ -178,25 +194,42 @@ export default function CenterSettingsPage() {
   async function addCompetitor() {
     if (!newCompName.trim()) return
     setSaving(true)
-    await supabase.from("center_competitors").insert({
+    const { data, error } = await supabaseDirectInsert("center_competitors", {
       center_id: centerId,
       name: newCompName.trim(),
       description: newCompDesc.trim() || null
     })
+    if (error) {
+      console.error("addCompetitor error:", error)
+      alert("Kunne ikke legge til konkurrent: " + error.message)
+      setSaving(false)
+      return
+    }
     setNewCompName("")
     setNewCompDesc("")
-    const { data } = await supabase.from("center_competitors").select("*").eq("center_id", centerId).order("name")
-    setCompetitors(data || [])
+    if (data && data[0]) {
+      setCompetitors(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name, "nb")))
+    }
     setSaving(false)
   }
 
   async function removeCompetitor(id) {
-    await supabase.from("center_competitors").delete().eq("id", id)
+    const { error } = await supabaseDirectDelete("center_competitors", { id })
+    if (error) {
+      console.error("removeCompetitor error:", error)
+      alert("Kunne ikke fjerne konkurrent: " + error.message)
+      return
+    }
     setCompetitors(prev => prev.filter(c => c.id !== id))
   }
 
   async function updateCompetitorDesc(id, desc) {
-    await supabase.from("center_competitors").update({ description: desc }).eq("id", id)
+    const { error } = await supabaseDirectUpdate("center_competitors", { id }, { description: desc })
+    if (error) {
+      console.error("updateCompetitorDesc error:", error)
+      alert("Kunne ikke lagre beskrivelse: " + error.message)
+      return
+    }
     setCompetitors(prev => prev.map(c => c.id === id ? { ...c, description: desc } : c))
   }
 
@@ -238,7 +271,7 @@ export default function CenterSettingsPage() {
         // Insert in batches of 20 to avoid timeouts
         for (let i = 0; i < newOnes.length; i += 20) {
           const batch = newOnes.slice(i, i + 20)
-          const { error } = await supabase.from("center_tenants").insert(
+          const { error } = await supabaseDirectInsert("center_tenants",
             batch.map(t => ({ center_id: centerId, name: t.name, category: null, url: t.url || null }))
           )
           if (error) {
@@ -288,7 +321,7 @@ export default function CenterSettingsPage() {
     const existing = new Set(tenants.map(t => t.name.toLowerCase()))
     const newOnes = toImport.filter(t => !existing.has(t.name.toLowerCase()))
     if (newOnes.length > 0) {
-      await supabase.from("center_tenants").insert(
+      const { error } = await supabaseDirectInsert("center_tenants",
         newOnes.map(t => ({
           center_id: centerId,
           name: t.name,
@@ -298,6 +331,12 @@ export default function CenterSettingsPage() {
           facebook_page: normalizeFbPage(t.facebook)
         }))
       )
+      if (error) {
+        console.error("importExcelTenants error:", error)
+        alert("Feil ved import: " + error.message)
+        setSaving(false)
+        return
+      }
     }
     const { data } = await supabase.from("center_tenants").select("*").eq("center_id", centerId).order("name")
     setTenants(data || [])
