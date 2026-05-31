@@ -151,9 +151,27 @@ export default function CenterSettingsPage() {
       instagram_handle: normalizeIgHandle(fields.instagram_handle),
       facebook_page: normalizeFbPage(fields.facebook_page)
     }
-    await supabase.from("center_tenants").update(patch).eq("id", id)
-    setTenants(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
-    setEditingTenant(null)
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from("center_tenants").update(patch).eq("id", id).select()
+      if (error) {
+        console.error("updateTenant error:", error)
+        alert("Kunne ikke lagre: " + error.message)
+        return
+      }
+      if (!data || data.length === 0) {
+        alert("Ingen rad ble oppdatert – du mangler kanskje rettigheter (admin/eier) til å endre leietakere.")
+        return
+      }
+      setTenants(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
+      setEditingTenant(null)
+    } catch (e) {
+      console.error("updateTenant exception:", e)
+      alert("Uventet feil ved lagring: " + (e?.message || e))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function addCompetitor() {
