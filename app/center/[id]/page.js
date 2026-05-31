@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/AuthProvider"
-import { supabase } from "@/lib/supabase"
+import { supabase, supabaseDirectUpdate } from "@/lib/supabase"
 import { useRouter, useParams } from "next/navigation"
 
 const TONE_OPTIONS = [
@@ -153,15 +153,9 @@ export default function CenterSettingsPage() {
     }
     setSaving(true)
     try {
-      // The Supabase JS client can intermittently hang on its auth session
-      // lock (see lib/supabase.js), which makes .update() never resolve and the
-      // Save button silently do nothing. Race it against a timeout so we either
-      // succeed or surface a clear error instead of hanging forever.
-      const update = supabase.from("center_tenants").update(patch).eq("id", id).select()
-      const { data, error } = await Promise.race([
-        update,
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000))
-      ])
+      // Use a direct REST PATCH instead of the Supabase JS client, which hangs
+      // on its auth session lock and never resolves (see lib/supabase.js).
+      const { data, error } = await supabaseDirectUpdate("center_tenants", { id }, patch)
       if (error) {
         console.error("updateTenant error:", error)
         alert("Kunne ikke lagre: " + error.message)
@@ -175,11 +169,7 @@ export default function CenterSettingsPage() {
       setEditingTenant(null)
     } catch (e) {
       console.error("updateTenant exception:", e)
-      if (e?.message === "timeout") {
-        alert("Lagringen tok for lang tid (tilkoblingen hang). Prøv å lagre på nytt – eller last siden på nytt hvis det gjentar seg.")
-      } else {
-        alert("Uventet feil ved lagring: " + (e?.message || e))
-      }
+      alert("Uventet feil ved lagring: " + (e?.message || e))
     } finally {
       setSaving(false)
     }
