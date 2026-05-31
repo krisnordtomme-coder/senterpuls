@@ -153,8 +153,15 @@ export default function CenterSettingsPage() {
     }
     setSaving(true)
     try {
-      const { data, error } = await supabase
-        .from("center_tenants").update(patch).eq("id", id).select()
+      // The Supabase JS client can intermittently hang on its auth session
+      // lock (see lib/supabase.js), which makes .update() never resolve and the
+      // Save button silently do nothing. Race it against a timeout so we either
+      // succeed or surface a clear error instead of hanging forever.
+      const update = supabase.from("center_tenants").update(patch).eq("id", id).select()
+      const { data, error } = await Promise.race([
+        update,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000))
+      ])
       if (error) {
         console.error("updateTenant error:", error)
         alert("Kunne ikke lagre: " + error.message)
@@ -168,7 +175,11 @@ export default function CenterSettingsPage() {
       setEditingTenant(null)
     } catch (e) {
       console.error("updateTenant exception:", e)
-      alert("Uventet feil ved lagring: " + (e?.message || e))
+      if (e?.message === "timeout") {
+        alert("Lagringen tok for lang tid (tilkoblingen hang). Prøv å lagre på nytt – eller last siden på nytt hvis det gjentar seg.")
+      } else {
+        alert("Uventet feil ved lagring: " + (e?.message || e))
+      }
     } finally {
       setSaving(false)
     }
