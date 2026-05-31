@@ -1,12 +1,13 @@
 import { createClient } from "@supabase/supabase-js"
 import { createHash } from "crypto"
-import { STORES } from "../../../lib/stores"
+import { syncTenantsToStores } from "../../../lib/syncTenants"
 
 export const maxDuration = 300
 
+// Service role bypasses RLS so this server route can read/write stores & content.
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -156,30 +157,43 @@ async function fetchFacebookPosts(pageName, accessToken) {
     }
 }
 
-export async function POST() {
+export async function POST(request) {
     try {
         const accessToken = getAccessToken()
 
-        const { data: dbStores } = await supabase
-            .from("stores").select("*").eq("active", true)
+        let centerId = null
+        try {
+            const body = await request.json()
+            centerId = body?.centerId || null
+        } catch {
+            // No body — scan all active stores (legacy behavior).
+        }
 
-        if (!dbStores?.length) {
+        // Ensure stores exist (with social handles) for the center's tenants,
+        // then read them. Without a centerId, fall back to all active stores.
+        let dbStores = []
+        if (centerId) {
+            await syncTenantsToStores(centerId, supabase)
+            const { data } = await supabase
+                .from("stores").select("*").eq("center_id", centerId).eq("active", true)
+            dbStores = data || []
+        } else {
+            const { data } = await supabase
+                .from("stores").select("*").eq("active", true)
+            dbStores = data || []
+        }
+
+        if (!dbStores.length) {
             return Response.json({ message: "Ingen butikker funnet", stores: 0, newContent: 0 }, { status: 404 })
         }
 
-        const storeConfig = {}
-        for (const s of STORES) {
-            storeConfig[s.name.toLowerCase()] = s
-        }
-
-        // Collect all Instagram usernames
+        // Collect Instagram usernames from each store's stored handle.
         const igUsernames = []
         const usernameToStore = {}
         for (const store of dbStores) {
-            const config = storeConfig[store.name.toLowerCase()]
-            if (config?.instagram) {
-                igUsernames.push(config.instagram)
-                usernameToStore[config.instagram.toLowerCase()] = store
+            if (store.instagram_handle) {
+                igUsernames.push(store.instagram_handle)
+                usernameToStore[store.instagram_handle.toLowerCase()] = store
             }
         }
 
@@ -240,9 +254,8 @@ export async function POST() {
             const batch = dbStores.slice(i, i + 3)
             const batchResults = await Promise.all(
                 batch.map(async (store) => {
-                    const config = storeConfig[store.name.toLowerCase()]
-                    if (!config?.facebook || !accessToken) return { store, posts: [] }
-                    const fbPosts = await fetchFacebookPosts(config.facebook, accessToken)
+                    if (!store.facebook_page || !accessToken) return { store, posts: [] }
+                    const fbPosts = await fetchFacebookPosts(store.facebook_page, accessToken)
                     return { store, posts: fbPosts }
                 })
             )
@@ -286,7 +299,11 @@ export async function POST() {
         // Trigger AI analysis if new content found
         if (totalInserted > 0) {
             const base = process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : "http://localhost:3000"
-            fetch(base + "/api/analyze", { method: "POST" }).catch(() => {})
+            fetch(base + "/api/analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ centerId })
+            }).catch(() => {})
         }
 
         return Response.json({
