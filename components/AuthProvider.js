@@ -100,8 +100,16 @@ export function AuthProvider({ children }) {
       const membershipsData = data || []
       setMemberships(membershipsData)
       if (membershipsData.length > 0) {
-        const firstOrg = membershipsData[0].organizations
-        if (firstOrg) setCurrentOrg(firstOrg)
+        // Only default the org when none is selected. onAuthStateChange also
+        // fires on TOKEN_REFRESHED (e.g. during a long scan); without this
+        // guard it would reset the user's chosen org back to the first one.
+        setCurrentOrg(prev => {
+          if (prev) {
+            const stillMember = membershipsData.some(m => m.organization_id === prev.id)
+            if (stillMember) return prev
+          }
+          return membershipsData[0].organizations || prev
+        })
       }
     } catch (err) {
       console.error("fetchMemberships exception:", err)

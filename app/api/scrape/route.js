@@ -4,6 +4,8 @@ import { createHash } from "crypto"
 import { cookies } from "next/headers"
 import { syncTenantsToStores } from "../../../lib/syncTenants"
 
+export const maxDuration = 300
+
 function getSupabase(authToken) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
